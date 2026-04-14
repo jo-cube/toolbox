@@ -7,10 +7,11 @@ your machine.
 
 ## Tools
 
-| Tool      | What it does                                                   | Install                        | Usage docs                           |
-|-----------|----------------------------------------------------------------|--------------------------------|--------------------------------------|
-| `hello`   | Demo CLI that prints a friendly greeting.                      | `./scripts/install.sh hello`   | This README                          |
-| `ksetoff` | Bootstraps or resets Kafka consumer group offsets for a topic. | `./scripts/install.sh ksetoff` | [`docs/ksetoff.md`](docs/ksetoff.md) |
+| Tool      | What it does                                                                    | Install                        | Usage docs                           |
+|-----------|---------------------------------------------------------------------------------|--------------------------------|--------------------------------------|
+| `hello`   | Demo CLI that prints a friendly greeting.                                       | `./scripts/install.sh hello`   | This README                          |
+| `ksetoff` | Bootstraps or resets Kafka consumer group offsets for a topic.                  | `./scripts/install.sh ksetoff` | [`docs/ksetoff.md`](docs/ksetoff.md) |
+| `rdbsh`   | Inspect local RocksDB databases with an interactive shell or one-shot commands. | `./scripts/install.sh rdbsh`   | [`docs/rdbsh.md`](docs/rdbsh.md)     |
 
 ## Install A Tool
 
@@ -38,28 +39,43 @@ Install without cloning the repository:
 curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | sh -s -- ksetoff
 ```
 
-The installer currently supports:
+The installer supports release assets for the current platform and architecture.
+
+Current release coverage:
 
 - `darwin/arm64`
 - `darwin/amd64`
+- `linux/arm64` for `rdbsh`
+- `linux/amd64` for `rdbsh`
 
 Release assets are published as:
 
 ```text
 <tool>_darwin_arm64.tar.gz
 <tool>_darwin_amd64.tar.gz
+<tool>_linux_arm64.tar.gz
+<tool>_linux_amd64.tar.gz
 ```
 
 ## Tool Docs
 
 - `hello`: prints `Hello, world!`
 - `ksetoff`: see [`docs/ksetoff.md`](docs/ksetoff.md) for setup, config file format, examples, and troubleshooting
+- `rdbsh`: see [`docs/rdbsh.md`](docs/rdbsh.md) for interactive usage, exports, column families, and build prerequisites
 
 ## Use `hello`
 
 ```sh
 hello
 hello --version
+```
+
+## Use `rdbsh`
+
+```sh
+rdbsh --db /path/to/db
+rdbsh --db /path/to/db --exec "count"
+rdbsh --db /path/to/db --cf offsets --exec "scan 0x00 20"
 ```
 
 ## Repository Layout
@@ -69,14 +85,19 @@ hello --version
 ├── cmd/
 │   ├── hello/
 │   │   └── main.go
-│   └── ksetoff/
+│   ├── ksetoff/
+│   │   └── main.go
+│   └── rdbsh/
 │       └── main.go
 ├── docs/
-│   └── ksetoff.md
+│   ├── ksetoff.md
+│   └── rdbsh.md
 ├── internal/
 │   ├── buildinfo/
 │   ├── hello/
-│   └── ksetoff/
+│   ├── ksetoff/
+│   └── rdbsh/
+│       └── rocksdb/
 ├── scripts/
 │   └── install.sh
 ├── .github/workflows/
@@ -89,7 +110,14 @@ hello --version
 Prerequisites:
 
 - Go 1.25.4 or newer
-- macOS for the provided installer script
+- RocksDB development headers and libraries when building `rdbsh` from source
+- macOS or Linux for the installer script
+
+Source build notes for `rdbsh`:
+
+- On macOS, `brew install rocksdb`
+- On Ubuntu or Debian, `sudo apt-get install librocksdb-dev`
+- The `Makefile` auto-detects RocksDB via `pkg-config` when available and falls back to common Homebrew paths
 
 Build all CLIs into `./bin`:
 
@@ -108,6 +136,7 @@ Run from source:
 ```sh
 make run-hello
 make run-ksetoff ARGS='-h'
+make run-rdbsh ARGS='--db /path/to/db'
 ```
 
 Install from source:
@@ -115,12 +144,14 @@ Install from source:
 ```sh
 make install-hello
 make install-ksetoff
+make install-rdbsh
 ```
 
 GitHub Actions:
 
 - build and test on pushes and pull requests
-- cross-build macOS binaries for `amd64` and `arm64`
+- cross-build pure Go macOS binaries for `amd64` and `arm64`
+- build native `rdbsh` binaries for macOS and Linux on their target runners
 - publish tarball release assets when a `v*` tag is pushed
 
 To add another CLI later:

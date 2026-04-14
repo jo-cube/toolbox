@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  purego-release:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -54,3 +54,57 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: dist/${{ matrix.cli }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz
+
+  rdbsh-release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - runner: macos-13
+            goos: darwin
+            goarch: amd64
+          - runner: macos-14
+            goos: darwin
+            goarch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install RocksDB on Linux
+        if: matrix.goos == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librocksdb-dev
+
+      - name: Install RocksDB on macOS
+        if: matrix.goos == 'darwin'
+        run: brew install rocksdb
+
+      - name: Build rdbsh archive
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          mkdir -p dist
+          go build -ldflags "-s -w -X github.com/jo-cube/toolbox/internal/buildinfo.version=${VERSION}" -o dist/rdbsh ./cmd/rdbsh
+          tar -czf "dist/rdbsh_${GOOS}_${GOARCH}.tar.gz" -C dist rdbsh
+          rm dist/rdbsh
+
+      - name: Upload rdbsh release asset
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: dist/rdbsh_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz
