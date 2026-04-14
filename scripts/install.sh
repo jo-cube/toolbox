@@ -10,7 +10,7 @@ usage() {
 	cat <<EOF
 Usage: $0 <cli-name> [destination]
 
-Installs a prebuilt macOS release binary for a CLI from ${REPO}.
+Installs a prebuilt release binary for a CLI from ${REPO}.
 
 Arguments:
   cli-name      Name of the CLI to install, for example: hello
@@ -41,10 +41,18 @@ fi
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 
-if [ "$OS" != "Darwin" ]; then
-	printf 'error: this installer currently supports macOS only (detected %s)\n' "$OS" >&2
-	exit 1
-fi
+case "$OS" in
+	Darwin)
+		GOOS="darwin"
+		;;
+	Linux)
+		GOOS="linux"
+		;;
+	*)
+		printf 'error: unsupported operating system: %s\n' "$OS" >&2
+		exit 1
+		;;
+esac
 
 case "$ARCH" in
 	arm64|aarch64)
@@ -54,12 +62,12 @@ case "$ARCH" in
 		GOARCH="amd64"
 		;;
 	*)
-		printf 'error: unsupported macOS architecture: %s\n' "$ARCH" >&2
+		printf 'error: unsupported architecture: %s\n' "$ARCH" >&2
 		exit 1
 		;;
 esac
 
-ASSET_NAME="${CLI_NAME}_darwin_${GOARCH}.tar.gz"
+ASSET_NAME="${CLI_NAME}_${GOOS}_${GOARCH}.tar.gz"
 TMP_DIR="$(mktemp -d)"
 ARCHIVE_PATH="${TMP_DIR}/${ASSET_NAME}"
 
