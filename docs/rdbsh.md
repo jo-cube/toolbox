@@ -1,6 +1,6 @@
 # rdbsh
 
-`rdbsh` is a RocksDB shell for inspecting local databases interactively or by running a single command.
+`rdbsh` is a RocksDB shell for inspecting local databases interactively or with a single command.
 
 Use it when you want to:
 
@@ -10,7 +10,7 @@ Use it when you want to:
 - inspect RocksDB properties and table statistics
 - export all data or a filtered subset to CSV or JSON
 
-`rdbsh` opens databases in read-only mode by default.
+`rdbsh` opens databases in read-only mode unless you pass `--writable`.
 
 ## Install
 
@@ -91,7 +91,7 @@ Shell commands:
 
 ## Input Format
 
-All key, value, and prefix arguments accept either plain text or raw bytes encoded as hex.
+Keys, values, and prefixes can be plain text or raw bytes encoded as hex.
 
 Examples:
 
@@ -109,7 +109,7 @@ Rules:
 - Use double quotes for arguments containing spaces
 - Use `\` to escape spaces or quotes in the shell
 
-Printable bytes are shown as text. Non-printable bytes are shown as lowercase hex.
+Printable bytes are shown as text. Non-printable bytes are shown as lowercase hex. Empty values are shown as `(empty)`.
 
 ## Common Workflows
 
@@ -154,10 +154,12 @@ key,value
 JSON export writes an array of objects in this shape:
 
 ```json
-{
-  "key": "00000001",
-  "value": "0000000000209163"
-}
+[
+  {
+    "key": "00000001",
+    "value": "0000000000209163"
+  }
+]
 ```
 
 When the export target is `-`, data is written to stdout and the completion message is written to stderr.
