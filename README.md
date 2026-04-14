@@ -1,126 +1,41 @@
 # toolbox
 
-`toolbox` is a Go monorepo for small, independent command-line tools.
+`toolbox` is a collection of small command-line tools.
 
-The repository is structured so each CLI lives under `cmd/<name>`, shared code lives under `internal/`, and release
-tooling can package and install a specific CLI without cloning the repository.
+The main way to use this repository is to install a released binary for the specific tool you want and run it locally on
+your machine.
 
-## Repository layout
+## Tools
 
-```text
-.
-├── cmd/
-│   └── hello/
-│       └── main.go
-├── internal/
-│   ├── buildinfo/
-│   └── hello/
-├── scripts/
-│   └── install.sh
-├── .github/workflows/
-├── Makefile
-└── go.mod
-```
+| Tool      | What it does                                                   | Install                        | Usage docs                           |
+|-----------|----------------------------------------------------------------|--------------------------------|--------------------------------------|
+| `hello`   | Demo CLI that prints a friendly greeting.                      | `./scripts/install.sh hello`   | This README                          |
+| `ksetoff` | Bootstraps or resets Kafka consumer group offsets for a topic. | `./scripts/install.sh ksetoff` | [`docs/ksetoff.md`](docs/ksetoff.md) |
 
-## Included demo CLI
+## Install A Tool
 
-`hello` is a standalone Go binary built from `cmd/hello`.
-
-It prints:
-
-```text
-Hello, world!
-```
-
-It also supports:
+Install the latest release of a tool:
 
 ```sh
-hello --version
+./scripts/install.sh ksetoff
 ```
 
-## Prerequisites
-
-- Go 1.25.4 or newer
-- macOS for the provided installer script
-
-## Build locally
-
-Build the demo CLI into `./bin`:
+Install to a custom directory:
 
 ```sh
-make build
+./scripts/install.sh ksetoff "$HOME/bin"
 ```
 
-Build with an explicit version string:
+Install a specific release version:
 
 ```sh
-make build VERSION=v0.1.0
+VERSION=v0.1.0 ./scripts/install.sh ksetoff
 ```
 
-## Run locally
-
-Run the demo CLI without installing it:
+Install without cloning the repository:
 
 ```sh
-make run-hello
-```
-
-Or run Go directly:
-
-```sh
-go run ./cmd/hello
-go run ./cmd/hello --version
-```
-
-## Test
-
-Run the test suite:
-
-```sh
-make test
-```
-
-## Install locally from source
-
-Install `hello` into `~/.local/bin`:
-
-```sh
-make install-hello
-```
-
-Install somewhere else:
-
-```sh
-make install-hello LOCAL_BIN="$HOME/bin"
-```
-
-## Install a specific CLI from a GitHub release
-
-The repository includes `scripts/install.sh`, which downloads a prebuilt release asset for a named CLI and installs it
-locally.
-
-Example using the script from this repo:
-
-```sh
-./scripts/install.sh hello
-```
-
-Install to a custom location:
-
-```sh
-./scripts/install.sh hello "$HOME/bin"
-```
-
-Install a specific release tag:
-
-```sh
-VERSION=v0.1.0 ./scripts/install.sh hello
-```
-
-Use it without cloning by running the published script directly from GitHub:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | sh -s -- hello
+curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | sh -s -- ksetoff
 ```
 
 The installer currently supports:
@@ -128,31 +43,90 @@ The installer currently supports:
 - `darwin/arm64`
 - `darwin/amd64`
 
-It downloads release assets named like:
+Release assets are published as:
 
 ```text
-hello_darwin_arm64.tar.gz
-hello_darwin_amd64.tar.gz
+<tool>_darwin_arm64.tar.gz
+<tool>_darwin_amd64.tar.gz
 ```
 
-## Release behavior
+## Tool Docs
 
-GitHub Actions are set up to:
+- `hello`: prints `Hello, world!`
+- `ksetoff`: see [`docs/ksetoff.md`](docs/ksetoff.md) for setup, config file format, examples, and troubleshooting
+
+## Use `hello`
+
+```sh
+hello
+hello --version
+```
+
+## Repository Layout
+
+```text
+.
+├── cmd/
+│   ├── hello/
+│   │   └── main.go
+│   └── ksetoff/
+│       └── main.go
+├── docs/
+│   └── ksetoff.md
+├── internal/
+│   ├── buildinfo/
+│   ├── hello/
+│   └── ksetoff/
+├── scripts/
+│   └── install.sh
+├── .github/workflows/
+├── Makefile
+└── go.mod
+```
+
+## For Contributors
+
+Prerequisites:
+
+- Go 1.25.4 or newer
+- macOS for the provided installer script
+
+Build all CLIs into `./bin`:
+
+```sh
+make build
+```
+
+Run tests:
+
+```sh
+make test
+```
+
+Run from source:
+
+```sh
+make run-hello
+make run-ksetoff ARGS='-h'
+```
+
+Install from source:
+
+```sh
+make install-hello
+make install-ksetoff
+```
+
+GitHub Actions:
 
 - build and test on pushes and pull requests
 - cross-build macOS binaries for `amd64` and `arm64`
 - publish tarball release assets when a `v*` tag is pushed
 
-The release workflow currently packages the `hello` CLI. As you add more CLIs, extend the matrix or add a simple
-packaging loop.
+To add another CLI later:
 
-## Add another CLI later
-
-1. Create a new entrypoint at `cmd/<cli-name>/main.go`.
-2. Put reusable code in `internal/<package>` if it is shared across tools.
-3. Add build and run targets to `Makefile` if you want dedicated shortcuts.
-4. Update the release workflow to package the new CLI as `<cli-name>_<goos>_<goarch>.tar.gz`.
-5. Document the new CLI in this README.
-
-This keeps each CLI independent while preserving one module, one CI pipeline, and one release/install path for the whole
-toolbox.
+1. Create `cmd/<cli-name>/main.go`.
+2. Put tool-specific logic in `internal/<cli-name>/`.
+3. Add build and install shortcuts to `Makefile` if needed.
+4. Update CI and release workflows to package the new CLI.
+5. Add the tool to the table above and add dedicated docs when the tool needs more than a short usage note.
