@@ -1,8 +1,8 @@
 # ksetoff
 
-`ksetoff` sets Kafka consumer group offsets for a topic without running the consumer application itself.
+`ksetoff` sets Kafka consumer group offsets for a topic without starting the consumer application.
 
-Use it when you want the next consumer instance in a group to start from a specific point, such as:
+Use it when you want the next consumer in a group to start from a specific point, such as:
 
 - the earliest available data
 - the latest offset
@@ -33,7 +33,7 @@ ksetoff --version
 
 1. Create or locate a Kafka config file in kcat or librdkafka `key=value` format.
 2. Run `ksetoff` in `-dry-run` mode first.
-3. Review the partition plan and warnings.
+3. Review the plan and any warnings.
 4. Re-run without `-dry-run` to commit offsets.
 
 Example dry run:
@@ -122,6 +122,11 @@ Supported offset specs:
 - `latest`: end of each target partition
 - `timestamp:<ISO-8601>`: first offset at or after a timestamp
 
+Accepted aliases:
+
+- `beginning`: same as `earliest`
+- `end`: same as `latest`
+
 Accepted timestamp examples:
 
 - `timestamp:2026-04-13T00:00:00Z`
@@ -131,7 +136,7 @@ Accepted timestamp examples:
 
 ## Kafka Config File
 
-`ksetoff` reads connection settings from a kcat or librdkafka style `key=value` file.
+`ksetoff` reads connection settings from a kcat or librdkafka-style `key=value` file.
 
 Supported keys:
 
@@ -160,7 +165,7 @@ ssl.ca.location=/path/to/ca.pem
 
 Notes:
 
-- `bootstrap.servers` is required.
+- One of `bootstrap.servers` or `metadata.broker.list` is required.
 - Unknown keys are ignored.
 - If you use mTLS, both `ssl.certificate.location` and `ssl.key.location` must be set.
 - Encrypted private keys are not currently supported. If `ssl.key.password` is set, `ksetoff` returns a clear error.
@@ -176,7 +181,7 @@ Notes:
 - per-partition new offset
 - low and high watermarks
 
-Warnings are printed when a requested offset is outside the currently available range.
+Warnings are printed when a requested offset is outside the available range.
 
 - If the requested offset is below the low watermark, the consumer will start from the earliest available data.
 - If the requested offset is above the high watermark, the consumer will wait for new messages.
