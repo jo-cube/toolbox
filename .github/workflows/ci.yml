@@ -29,7 +29,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        goarch: [ amd64, arm64 ]
+        include:
+          - cli: hello
+            goarch: amd64
+          - cli: hello
+            goarch: arm64
+          - cli: ksetoff
+            goarch: amd64
+          - cli: ksetoff
+            goarch: arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,10 +47,10 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Cross-build hello for macOS
+      - name: Cross-build ${{ matrix.cli }} for macOS
         env:
           GOOS: darwin
           GOARCH: ${{ matrix.goarch }}
         run: |
           mkdir -p dist
-          go build -ldflags "-s -w -X github.com/jo-cube/toolbox/internal/buildinfo.version=${GITHUB_SHA}" -o dist/hello_${GOOS}_${GOARCH} ./cmd/hello
+          go build -ldflags "-s -w -X github.com/jo-cube/toolbox/internal/buildinfo.version=${GITHUB_SHA}" -o dist/${{ matrix.cli }}_${GOOS}_${GOARCH} ./cmd/${{ matrix.cli }}
