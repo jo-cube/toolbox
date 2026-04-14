@@ -41,17 +41,15 @@ curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/instal
 
 The installer supports release assets for the current platform and architecture.
 
-Current release coverage:
+Current release coverage for all tools:
 
-- `darwin/arm64`
 - `darwin/amd64`
-- `linux/arm64` for `rdbsh`
-- `linux/amd64` for `rdbsh`
+- `linux/arm64`
+- `linux/amd64`
 
 Release assets are published as:
 
 ```text
-<tool>_darwin_arm64.tar.gz
 <tool>_darwin_amd64.tar.gz
 <tool>_linux_arm64.tar.gz
 <tool>_linux_amd64.tar.gz
@@ -150,8 +148,8 @@ make install-rdbsh
 GitHub Actions:
 
 - build and test on pushes and pull requests
-- cross-build pure Go macOS binaries for `amd64` and `arm64`
-- build native `rdbsh` binaries for macOS and Linux on their target runners
+- cross-build pure Go binaries for Linux on `amd64` and `arm64`, plus macOS `amd64`
+- build native `rdbsh` binaries for Linux on `amd64` and `arm64`, plus macOS `amd64`
 - publish tarball release assets when a `v*` tag is pushed
 
 To add another CLI later:
