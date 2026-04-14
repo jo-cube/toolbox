@@ -1,19 +1,18 @@
 # toolbox
 
-`toolbox` is a collection of small command-line tools.
+`toolbox` is a small Go monorepo for command-line utilities.
 
-The main way to use this repository is to install a released binary for the specific tool you want and run it locally on
-your machine.
+Each tool is released as its own binary. Most users will install the specific tool they need and run it locally.
 
 ## Tools
 
-| Tool      | What it does                                                                    | Install                        | Usage docs                           |
-|-----------|---------------------------------------------------------------------------------|--------------------------------|--------------------------------------|
-| `hello`   | Demo CLI that prints a friendly greeting.                                       | `./scripts/install.sh hello`   | This README                          |
-| `ksetoff` | Bootstraps or resets Kafka consumer group offsets for a topic.                  | `./scripts/install.sh ksetoff` | [`docs/ksetoff.md`](docs/ksetoff.md) |
-| `rdbsh`   | Inspect local RocksDB databases with an interactive shell or one-shot commands. | `./scripts/install.sh rdbsh`   | [`docs/rdbsh.md`](docs/rdbsh.md)     |
+| Tool      | What it does                                                                    | Docs                                 |
+|-----------|---------------------------------------------------------------------------------|--------------------------------------|
+| `hello`   | Demo CLI that prints a friendly greeting.                                       | This README                          |
+| `ksetoff` | Bootstraps or resets Kafka consumer group offsets for a topic.                  | [`docs/ksetoff.md`](docs/ksetoff.md) |
+| `rdbsh`   | Inspect local RocksDB databases with an interactive shell or one-shot commands. | [`docs/rdbsh.md`](docs/rdbsh.md)     |
 
-## Install A Tool
+## Install
 
 Install the latest release of a tool:
 
@@ -39,42 +38,33 @@ Install without cloning the repository:
 curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | sh -s -- ksetoff
 ```
 
-The installer supports release assets for the current platform and architecture.
+Release binaries are published for:
 
-Current release coverage for all tools:
-
-- `darwin/amd64`
-- `linux/arm64`
 - `linux/amd64`
+- `linux/arm64`
+- `darwin/arm64`
 
-Release assets are published as:
+Release asset names follow this pattern:
 
 ```text
-<tool>_darwin_amd64.tar.gz
-<tool>_linux_arm64.tar.gz
 <tool>_linux_amd64.tar.gz
+<tool>_linux_arm64.tar.gz
+<tool>_darwin_arm64.tar.gz
 ```
 
-## Tool Docs
+## Quick Usage
 
-- `hello`: prints `Hello, world!`
-- `ksetoff`: see [`docs/ksetoff.md`](docs/ksetoff.md) for setup, config file format, examples, and troubleshooting
-- `rdbsh`: see [`docs/rdbsh.md`](docs/rdbsh.md) for interactive usage, exports, column families, and build prerequisites
-
-## Use `hello`
+`hello` is the simplest tool in the repo:
 
 ```sh
 hello
 hello --version
 ```
 
-## Use `rdbsh`
+For everything else, use the dedicated tool docs:
 
-```sh
-rdbsh --db /path/to/db
-rdbsh --db /path/to/db --exec "count"
-rdbsh --db /path/to/db --cf offsets --exec "scan 0x00 20"
-```
+- [`docs/ksetoff.md`](docs/ksetoff.md)
+- [`docs/rdbsh.md`](docs/rdbsh.md)
 
 ## Repository Layout
 
@@ -148,8 +138,8 @@ make install-rdbsh
 GitHub Actions:
 
 - build and test on pushes and pull requests
-- cross-build pure Go binaries for Linux on `amd64` and `arm64`, plus macOS `amd64`
-- build native `rdbsh` binaries for Linux on `amd64` and `arm64`, plus macOS `amd64`
+- cross-build pure Go binaries for Linux on `amd64` and `arm64`, plus macOS `arm64`
+- build native `rdbsh` binaries for Linux on `amd64` and `arm64`, plus macOS `arm64`
 - publish tarball release assets when a `v*` tag is pushed
 
 To add another CLI later:

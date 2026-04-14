@@ -43,7 +43,7 @@ jobs:
             goarch: arm64
           - cli: hello
             goos: darwin
-            goarch: amd64
+            goarch: arm64
           - cli: ksetoff
             goos: linux
             goarch: amd64
@@ -52,7 +52,7 @@ jobs:
             goarch: arm64
           - cli: ksetoff
             goos: darwin
-            goarch: amd64
+            goarch: arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
