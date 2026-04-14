@@ -17,17 +17,23 @@ jobs:
       matrix:
         include:
           - cli: hello
-            goos: darwin
+            goos: linux
             goarch: amd64
           - cli: hello
+            goos: linux
+            goarch: arm64
+          - cli: hello
             goos: darwin
+            goarch: amd64
+          - cli: ksetoff
+            goos: linux
+            goarch: amd64
+          - cli: ksetoff
+            goos: linux
             goarch: arm64
           - cli: ksetoff
             goos: darwin
             goarch: amd64
-          - cli: ksetoff
-            goos: darwin
-            goarch: arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -69,9 +75,6 @@ jobs:
           - runner: macos-13
             goos: darwin
             goarch: amd64
-          - runner: macos-14
-            goos: darwin
-            goarch: arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
