@@ -2,13 +2,14 @@
 
 `toolbox` is a collection of small command-line tools.
 
-The main way to use this repository is to install a released binary for the specific tool you want and run it locally on your machine.
+The main way to use this repository is to install a released binary for the specific tool you want and run it locally on
+your machine.
 
 ## Tools
 
-| Tool | What it does | Install | Usage docs |
-| --- | --- | --- | --- |
-| `hello` | Demo CLI that prints a friendly greeting. | `./scripts/install.sh hello` | This README |
+| Tool      | What it does                                                   | Install                        | Usage docs                           |
+|-----------|----------------------------------------------------------------|--------------------------------|--------------------------------------|
+| `hello`   | Demo CLI that prints a friendly greeting.                      | `./scripts/install.sh hello`   | This README                          |
 | `ksetoff` | Bootstraps or resets Kafka consumer group offsets for a topic. | `./scripts/install.sh ksetoff` | [`docs/ksetoff.md`](docs/ksetoff.md) |
 
 ## Install A Tool
