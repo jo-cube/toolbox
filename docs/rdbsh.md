@@ -11,6 +11,7 @@ Use it when you want to:
 - export all data or a filtered subset to CSV or JSON
 
 `rdbsh` opens databases in read-only mode unless you pass `--writable`.
+It opens the database locally; it does not connect to a remote service.
 
 ## Install
 
@@ -73,6 +74,7 @@ Optional flags:
 - `--writable`: open the database in read-write mode
 - `--cf`: column family to operate on; defaults to the default column family
 - `--exec`: run a single shell command and exit
+- `--force`: allow `export <file>` to overwrite an existing file
 - `--version`: print version information
 
 Shell commands:
@@ -88,6 +90,12 @@ Shell commands:
 - `cfs`: list available column families and mark the selected one
 - `help`: show shell help
 - `exit` or `quit`: leave the interactive shell
+
+Write commands:
+
+- `put` and `delete` require `--writable`.
+- `export` does not require `--writable`; it reads data and writes the export target.
+- `export <file>` fails if the file already exists unless `--force` is set.
 
 ## Input Format
 
@@ -137,6 +145,12 @@ Export the full database to JSON:
 rdbsh --db /tmp/offsetstorage --exec "export /tmp/dump.json json"
 ```
 
+Overwrite an existing export file:
+
+```sh
+rdbsh --db /tmp/offsetstorage --force --exec "export /tmp/dump.json json"
+```
+
 Pipe filtered JSON to another command:
 
 ```sh
@@ -163,6 +177,17 @@ JSON export writes an array of objects in this shape:
 ```
 
 When the export target is `-`, data is written to stdout and the completion message is written to stderr.
+
+Exporting to a file fails if the file already exists unless `--force` is set.
+
+## Automation Notes
+
+- Usage errors exit with status `2`.
+- Runtime errors exit with status `1`.
+- `--exec` runs one shell command and exits.
+- In interactive mode, command errors are printed to stderr and the shell keeps running.
+- In `export - ...`, exported data is written to stdout and the completion message is written to stderr.
+- Large `scan`, `count`, and `export` commands can be slow on large databases because they iterate keys.
 
 ## Column Families
 

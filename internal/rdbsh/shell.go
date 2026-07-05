@@ -53,22 +53,24 @@ func NewShell(cfg Config) (*Shell, error) {
 		selectedCF = "default"
 	}
 
-	if cfg.ColumnFamily == "" {
+	if len(availableCFs) > 0 {
+		db, err = rocksdb.OpenWithColumnFamilies(cfg.DBPath, availableCFs, !cfg.Writable)
+		if err == nil {
+			var ok bool
+			selectedHandle, ok = db.ColumnFamily(selectedCF)
+			if !ok {
+				db.Close()
+				return nil, fmt.Errorf("column family %q not found", selectedCF)
+			}
+		}
+	} else if cfg.ColumnFamily == "" {
 		if cfg.Writable {
 			db, err = rocksdb.Open(cfg.DBPath)
 		} else {
 			db, err = rocksdb.OpenReadOnly(cfg.DBPath)
 		}
 	} else {
-		db, err = rocksdb.OpenWithColumnFamilies(cfg.DBPath, availableCFs, !cfg.Writable)
-		if err == nil {
-			var ok bool
-			selectedHandle, ok = db.ColumnFamily(cfg.ColumnFamily)
-			if !ok {
-				db.Close()
-				return nil, fmt.Errorf("column family %q not found", cfg.ColumnFamily)
-			}
-		}
+		return nil, fmt.Errorf("column family %q not found", selectedCF)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("open rocksdb at %s: %w", cfg.DBPath, err)
@@ -93,12 +95,15 @@ func NewShell(cfg Config) (*Shell, error) {
 func (s *Shell) Close() {
 	if s.ro != nil {
 		s.ro.Destroy()
+		s.ro = nil
 	}
 	if s.wo != nil {
 		s.wo.Destroy()
+		s.wo = nil
 	}
 	if s.db != nil {
 		s.db.Close()
+		s.db = nil
 	}
 }
 

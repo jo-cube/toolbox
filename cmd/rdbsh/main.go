@@ -16,6 +16,7 @@ func main() {
 	writable := flag.Bool("writable", false, "open the database in read-write mode")
 	columnFamily := flag.String("cf", "", "column family to operate on (default: default)")
 	execCommand := flag.String("exec", "", "run a single command and exit")
+	force := flag.Bool("force", false, "allow export to overwrite an existing file")
 
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s --db <path> [options]\n\n", os.Args[0])
@@ -63,6 +64,7 @@ func main() {
 		Writable:     *writable,
 		ColumnFamily: strings.TrimSpace(*columnFamily),
 		ExecCommand:  *execCommand,
+		Force:        *force,
 		In:           os.Stdin,
 		Out:          os.Stdout,
 		ErrOut:       os.Stderr,

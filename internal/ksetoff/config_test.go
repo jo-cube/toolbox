@@ -66,6 +66,11 @@ func TestParseConfigFile(t *testing.T) {
 			content: "=value\nbootstrap.servers=broker1:9092\n",
 			wantErr: "empty key",
 		},
+		{
+			name:    "unsupported security protocol",
+			content: "bootstrap.servers=broker1:9092\nsecurity.protocol=sasl-ssl\n",
+			wantErr: "unsupported security.protocol",
+		},
 	}
 
 	for _, tt := range tests {

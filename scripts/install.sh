@@ -38,6 +38,37 @@ if [ "$#" -eq 2 ]; then
 	INSTALL_DIR="$2"
 fi
 
+case "$CLI_NAME" in
+	hello|ksetoff|rdbsh)
+		;;
+	*)
+		printf 'error: unsupported CLI: %s\n' "$CLI_NAME" >&2
+		exit 1
+		;;
+esac
+
+case "$REPO" in
+	*/*/*|/*|*/|*'..'*|*[!A-Za-z0-9._/-]*)
+		printf 'error: invalid GITHUB_REPOSITORY: %s\n' "$REPO" >&2
+		exit 1
+		;;
+	*/*)
+		;;
+	*)
+		printf 'error: invalid GITHUB_REPOSITORY: %s\n' "$REPO" >&2
+		exit 1
+		;;
+esac
+
+case "$VERSION" in
+	*[!A-Za-z0-9._-]*)
+		printf 'error: invalid VERSION: %s\n' "$VERSION" >&2
+		exit 1
+		;;
+	*)
+		;;
+esac
+
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 
@@ -78,9 +109,9 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 if command -v curl >/dev/null 2>&1; then
-	DOWNLOAD_CMD='curl -fsSL'
+	DOWNLOAD_TOOL='curl'
 elif command -v wget >/dev/null 2>&1; then
-	DOWNLOAD_CMD='wget -qO-'
+	DOWNLOAD_TOOL='wget'
 else
 	printf 'error: curl or wget is required to download release assets\n' >&2
 	exit 1
@@ -96,9 +127,20 @@ case "$VERSION" in
 esac
 
 printf 'Downloading %s from %s\n' "$ASSET_NAME" "$DOWNLOAD_URL"
-sh -c "$DOWNLOAD_CMD \"$DOWNLOAD_URL\" > \"$ARCHIVE_PATH\""
+case "$DOWNLOAD_TOOL" in
+	curl)
+		curl -fsSL "$DOWNLOAD_URL" -o "$ARCHIVE_PATH"
+		;;
+	wget)
+		wget -qO "$ARCHIVE_PATH" "$DOWNLOAD_URL"
+		;;
+esac
 
 mkdir -p "$INSTALL_DIR"
+if [ "$(tar -tzf "$ARCHIVE_PATH")" != "$CLI_NAME" ]; then
+	printf 'error: release archive must contain only %s\n' "$CLI_NAME" >&2
+	exit 1
+fi
 tar -xzf "$ARCHIVE_PATH" -C "$TMP_DIR"
 install -m 0755 "${TMP_DIR}/${CLI_NAME}" "${INSTALL_DIR}/${CLI_NAME}"
 

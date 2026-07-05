@@ -3,6 +3,7 @@
 `toolbox` is a small Go monorepo for command-line utilities.
 
 Each tool is released as its own binary. Most users will install the specific tool they need and run it locally.
+The tools are intentionally plain: command-line input, direct output, and small docs for the behavior that matters.
 
 ## Tools
 
@@ -66,6 +67,15 @@ For everything else, use the dedicated tool docs:
 - [`docs/ksetoff.md`](docs/ksetoff.md)
 - [`docs/rdbsh.md`](docs/rdbsh.md)
 
+## Behavior At A Glance
+
+- Usage errors exit with status `2`.
+- Runtime errors exit with status `1`.
+- `--version` prints the binary name and build version.
+- `ksetoff -dry-run` prints the offset plan and does not commit offsets.
+- `rdbsh` opens databases read-only unless `--writable` is set.
+- `rdbsh export <file>` refuses to overwrite an existing file unless `--force` is set.
+
 ## Repository Layout
 
 ```text
@@ -119,6 +129,16 @@ Run tests:
 make test
 ```
 
+`make test` runs `go test ./...`, so it needs RocksDB headers because `rdbsh` uses CGo.
+If RocksDB is not installed, run the pure-Go packages while working on unrelated changes:
+
+```sh
+go test ./internal/hello ./internal/ksetoff ./cmd/hello ./cmd/ksetoff
+```
+
+For a full test run without installing RocksDB on the host, use Docker if a Docker runtime is available.
+See [`AGENTS.md`](AGENTS.md) for the low-noise container workflow used in this repo.
+
 Run from source:
 
 ```sh
@@ -141,6 +161,10 @@ GitHub Actions:
 - cross-build pure Go binaries for Linux on `amd64` and `arm64`, plus macOS `arm64`
 - build native `rdbsh` binaries for Linux on `amd64` and `arm64`, plus macOS `arm64`
 - publish tarball release assets when a `v*` tag is pushed
+
+## Notes For Agents
+
+Start with [`AGENTS.md`](AGENTS.md). It records the repo map, testing tiers, Docker test workflow, and cleanup commands for temporary Docker artifacts.
 
 To add another CLI later:
 

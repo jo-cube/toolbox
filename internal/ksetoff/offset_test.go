@@ -1,10 +1,13 @@
 package ksetoff
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/twmb/franz-go/pkg/kadm"
 )
 
 func TestParseOffsetSpec(t *testing.T) {
@@ -105,5 +108,43 @@ func TestTargetPartitions(t *testing.T) {
 	_, err = targetPartitions(3, []int32{3})
 	if err == nil || !strings.Contains(err.Error(), "out of range") {
 		t.Fatalf("targetPartitions() error = %v, want out of range", err)
+	}
+}
+
+func TestWatermarksForPartitions(t *testing.T) {
+	t.Parallel()
+
+	startOffsets := kadm.ListedOffsets{"topic-a": map[int32]kadm.ListedOffset{0: {Offset: 5}, 1: {Offset: 10}}}
+	endOffsets := kadm.ListedOffsets{"topic-a": map[int32]kadm.ListedOffset{0: {Offset: 20}, 1: {Offset: 30}}}
+
+	got, err := watermarksForPartitions("topic-a", []int32{0, 1}, startOffsets, endOffsets)
+	if err != nil {
+		t.Fatalf("watermarksForPartitions() error = %v", err)
+	}
+	if got[0] != (watermark{low: 5, high: 20}) || got[1] != (watermark{low: 10, high: 30}) {
+		t.Fatalf("watermarksForPartitions() = %#v", got)
+	}
+
+	_, err = watermarksForPartitions("topic-a", []int32{2}, startOffsets, endOffsets)
+	if err == nil || !strings.Contains(err.Error(), "no start offset returned") {
+		t.Fatalf("watermarksForPartitions() error = %v, want missing start offset", err)
+	}
+
+	brokenStart := kadm.ListedOffsets{"topic-a": map[int32]kadm.ListedOffset{0: {Err: errors.New("offline")}}}
+	_, err = watermarksForPartitions("topic-a", []int32{0}, brokenStart, endOffsets)
+	if err == nil || !strings.Contains(err.Error(), "start offset") {
+		t.Fatalf("watermarksForPartitions() error = %v, want start offset error", err)
+	}
+}
+
+func TestTimestampOffsetOrHighWatermark(t *testing.T) {
+	t.Parallel()
+
+	wm := watermark{low: 5, high: 20}
+	if got := timestampOffsetOrHighWatermark(12, wm); got != 12 {
+		t.Fatalf("timestampOffsetOrHighWatermark() = %d, want 12", got)
+	}
+	if got := timestampOffsetOrHighWatermark(-1, wm); got != 20 {
+		t.Fatalf("timestampOffsetOrHighWatermark() = %d, want high watermark 20", got)
 	}
 }
