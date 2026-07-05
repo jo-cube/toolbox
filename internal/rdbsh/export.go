@@ -36,7 +36,7 @@ func (s *Shell) cmdExport(args []string) error {
 	closer := io.NopCloser(strings.NewReader(""))
 	closeNeeded := false
 	if filePath != "-" {
-		file, err := os.Create(filePath)
+		file, err := openExportFile(filePath, s.config.Force)
 		if err != nil {
 			return err
 		}
@@ -59,6 +59,14 @@ func (s *Shell) cmdExport(args []string) error {
 	}
 	fmt.Fprintf(s.out, "exported %d entries to %s (%s)\n", count, filePath, format)
 	return nil
+}
+
+func openExportFile(filePath string, force bool) (*os.File, error) {
+	flag := os.O_WRONLY | os.O_CREATE | os.O_EXCL
+	if force {
+		flag = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+	}
+	return os.OpenFile(filePath, flag, 0o644)
 }
 
 func (s *Shell) export(writer io.Writer, format string, prefix []byte) (int, error) {

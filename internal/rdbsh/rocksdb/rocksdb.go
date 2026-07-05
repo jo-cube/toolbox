@@ -141,15 +141,20 @@ func (d *DB) Close() {
 	for _, handle := range d.order {
 		if handle != nil && handle.handle != nil {
 			C.rocksdb_column_family_handle_destroy(handle.handle)
+			handle.handle = nil
 		}
 	}
 	if d.db != nil {
 		C.rocksdb_close(d.db)
+		d.db = nil
 	}
 	if d.opts != nil {
 		C.rocksdb_options_destroy(d.opts)
+		d.opts = nil
 	}
-	clear(d.handles)
+	if d.handles != nil {
+		clear(d.handles)
+	}
 	d.order = nil
 }
 
@@ -205,6 +210,7 @@ func NewDefaultReadOptions() *ReadOptions {
 func (ro *ReadOptions) Destroy() {
 	if ro != nil && ro.opts != nil {
 		C.rocksdb_readoptions_destroy(ro.opts)
+		ro.opts = nil
 	}
 }
 
@@ -215,6 +221,7 @@ func NewDefaultWriteOptions() *WriteOptions {
 func (wo *WriteOptions) Destroy() {
 	if wo != nil && wo.opts != nil {
 		C.rocksdb_writeoptions_destroy(wo.opts)
+		wo.opts = nil
 	}
 }
 
@@ -261,6 +268,7 @@ func (it *Iterator) Err() error {
 func (it *Iterator) Close() {
 	if it != nil && it.it != nil {
 		C.rocksdb_iter_destroy(it.it)
+		it.it = nil
 	}
 }
 
