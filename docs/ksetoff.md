@@ -9,6 +9,8 @@ Use it when you want the next consumer in a group to start from a specific point
 - an exact numeric offset
 - the first offset at or after a timestamp
 
+It is meant for deliberate offset changes. Run a dry run first, read the plan, then commit only when the target group, topic, and partitions are what you expect.
+
 ## Install
 
 Install the latest release:
@@ -122,6 +124,13 @@ Supported offset specs:
 - `latest`: end of each target partition
 - `timestamp:<ISO-8601>`: first offset at or after a timestamp
 
+Timestamp notes:
+
+- Timestamps with an explicit timezone use that timezone.
+- Timestamps without a timezone are parsed as UTC.
+- Date-only timestamps mean midnight UTC on that date.
+- If the timestamp is after the last message in a partition, `ksetoff` uses that partition's high watermark.
+
 Accepted aliases:
 
 - `beginning`: same as `earliest`
@@ -167,6 +176,7 @@ Notes:
 
 - One of `bootstrap.servers` or `metadata.broker.list` is required.
 - Unknown keys are ignored.
+- `security.protocol` must be one of `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`.
 - If you use mTLS, both `ssl.certificate.location` and `ssl.key.location` must be set.
 - Encrypted private keys are not currently supported. If `ssl.key.password` is set, `ksetoff` returns a clear error.
 
@@ -185,6 +195,16 @@ Warnings are printed when a requested offset is outside the available range.
 
 - If the requested offset is below the low watermark, the consumer will start from the earliest available data.
 - If the requested offset is above the high watermark, the consumer will wait for new messages.
+- If a timestamp is after the last message in a partition, `ksetoff` uses that partition's high watermark.
+
+## Automation Notes
+
+- Usage errors exit with status `2`.
+- Runtime errors exit with status `1`.
+- The offset plan is written to stdout.
+- Connection status and warnings are written to stderr.
+- `-dry-run` never calls Kafka's offset commit API.
+- A non-dry run commits offsets only after metadata, watermarks, timestamp lookups, and the displayed plan are resolved.
 
 ## Safety Notes
 

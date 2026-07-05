@@ -88,6 +88,18 @@ func ParseConfigFile(path string) (*KafkaConfig, error) {
 	if len(cfg.Brokers) == 0 {
 		return nil, fmt.Errorf("config file %s: bootstrap.servers is required", path)
 	}
+	if !validSecurityProtocol(cfg.SecurityProtocol) {
+		return nil, fmt.Errorf("config file %s: unsupported security.protocol %q (supported: PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL)", path, cfg.SecurityProtocol)
+	}
 
 	return cfg, nil
+}
+
+func validSecurityProtocol(protocol string) bool {
+	switch protocol {
+	case "PLAINTEXT", "SSL", "SASL_PLAINTEXT", "SASL_SSL":
+		return true
+	default:
+		return false
+	}
 }

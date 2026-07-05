@@ -53,6 +53,11 @@ type Plan struct {
 	Rows    []PlanRow
 }
 
+type watermark struct {
+	low  int64
+	high int64
+}
+
 func ParseOffsetSpec(raw string) (OffsetSpec, error) {
 	switch strings.ToLower(raw) {
 	case "earliest", "beginning":
@@ -276,21 +281,9 @@ func resolvePlanRows(
 	startOffsets kadm.ListedOffsets,
 	endOffsets kadm.ListedOffsets,
 ) ([]PlanRow, error) {
-	type watermark struct {
-		low  int64
-		high int64
-	}
-
-	watermarks := make(map[int32]watermark, len(targetPartitions))
-	for _, partition := range targetPartitions {
-		var wm watermark
-		if startOffset, ok := startOffsets.Lookup(topic, partition); ok {
-			wm.low = startOffset.Offset
-		}
-		if endOffset, ok := endOffsets.Lookup(topic, partition); ok {
-			wm.high = endOffset.Offset
-		}
-		watermarks[partition] = wm
+	watermarks, err := watermarksForPartitions(topic, targetPartitions, startOffsets, endOffsets)
+	if err != nil {
+		return nil, err
 	}
 
 	rows := make([]PlanRow, 0, len(targetPartitions))
@@ -324,13 +317,43 @@ func resolvePlanRows(
 				return nil, fmt.Errorf("partition %d at timestamp %s: %w", partition, spec.Timestamp.Format(time.RFC3339), listedOffset.Err)
 			}
 			wm := watermarks[partition]
-			rows = append(rows, PlanRow{Partition: partition, NewOffset: listedOffset.Offset, LowWatermark: wm.low, HighWatermark: wm.high})
+			newOffset := timestampOffsetOrHighWatermark(listedOffset.Offset, wm)
+			rows = append(rows, PlanRow{Partition: partition, NewOffset: newOffset, LowWatermark: wm.low, HighWatermark: wm.high})
 		}
 	default:
 		return nil, fmt.Errorf("unsupported offset mode: %d", spec.Mode)
 	}
 
 	return rows, nil
+}
+
+func watermarksForPartitions(topic string, partitions []int32, startOffsets, endOffsets kadm.ListedOffsets) (map[int32]watermark, error) {
+	watermarks := make(map[int32]watermark, len(partitions))
+	for _, partition := range partitions {
+		startOffset, ok := startOffsets.Lookup(topic, partition)
+		if !ok {
+			return nil, fmt.Errorf("no start offset returned for partition %d", partition)
+		}
+		if startOffset.Err != nil {
+			return nil, fmt.Errorf("partition %d start offset: %w", partition, startOffset.Err)
+		}
+		endOffset, ok := endOffsets.Lookup(topic, partition)
+		if !ok {
+			return nil, fmt.Errorf("no end offset returned for partition %d", partition)
+		}
+		if endOffset.Err != nil {
+			return nil, fmt.Errorf("partition %d end offset: %w", partition, endOffset.Err)
+		}
+		watermarks[partition] = watermark{low: startOffset.Offset, high: endOffset.Offset}
+	}
+	return watermarks, nil
+}
+
+func timestampOffsetOrHighWatermark(offset int64, wm watermark) int64 {
+	if offset < 0 {
+		return wm.high
+	}
+	return offset
 }
 
 func fetchCurrentOffsets(ctx context.Context, admin *kadm.Client, groupID string, topic string, partitions []int32) (map[int32]string, error) {

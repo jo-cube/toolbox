@@ -52,6 +52,15 @@ func TestBuildClientOptsErrors(t *testing.T) {
 			},
 			wantErr: "both ssl.certificate.location and ssl.key.location must be set",
 		},
+		{
+			name: "unsupported security protocol",
+			cfg: &KafkaConfig{
+				Brokers:          []string{"broker1:9092"},
+				SecurityProtocol: "SASL-SSL",
+				SSLVerify:        true,
+			},
+			wantErr: "unsupported security.protocol",
+		},
 	}
 
 	for _, tt := range tests {

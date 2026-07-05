@@ -17,6 +17,10 @@ import (
 )
 
 func BuildClientOpts(cfg *KafkaConfig) ([]kgo.Opt, error) {
+	if !validSecurityProtocol(cfg.SecurityProtocol) {
+		return nil, fmt.Errorf("unsupported security.protocol: %s (supported: PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL)", cfg.SecurityProtocol)
+	}
+
 	opts := []kgo.Opt{kgo.SeedBrokers(cfg.Brokers...)}
 
 	needsTLS := cfg.SecurityProtocol == "SSL" || cfg.SecurityProtocol == "SASL_SSL"
