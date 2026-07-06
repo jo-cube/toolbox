@@ -1,0 +1,70 @@
+package sample
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestStableSampleIsRepeatable(t *testing.T) {
+	t.Parallel()
+
+	path := writeInput(t, "a\nb\nc\nd\n")
+	cfg := Config{Rate: 0.5, Stable: true, Seed: 7}
+
+	var a bytes.Buffer
+	if err := Run([]string{path}, cfg, &a); err != nil {
+		t.Fatal(err)
+	}
+	var b bytes.Buffer
+	if err := Run([]string{path}, cfg, &b); err != nil {
+		t.Fatal(err)
+	}
+	if a.String() != b.String() {
+		t.Fatalf("stable sample changed: %q != %q", a.String(), b.String())
+	}
+}
+
+func TestReservoirCount(t *testing.T) {
+	t.Parallel()
+
+	path := writeInput(t, "a\nb\nc\nd\n")
+	var out bytes.Buffer
+	if err := Run([]string{path}, Config{Count: 2, Seed: 1}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if got := bytes.Count(out.Bytes(), []byte("\n")); got != 2 {
+		t.Fatalf("reservoir wrote %d records, want 2\n%s", got, out.String())
+	}
+}
+
+func TestRateZeroIsValidAndEmitsNothing(t *testing.T) {
+	t.Parallel()
+
+	path := writeInput(t, "a\nb\n")
+	var out bytes.Buffer
+	if err := Run([]string{path}, Config{Rate: 0, RateSet: true}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("Run() wrote %q, want no output", out.String())
+	}
+}
+
+func TestValidateRejectsAmbiguousMode(t *testing.T) {
+	t.Parallel()
+
+	if err := Validate(Config{Rate: 0.1, Count: 10}); err == nil {
+		t.Fatal("Validate() accepted rate and count together")
+	}
+}
+
+func writeInput(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "input.txt")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
