@@ -139,7 +139,7 @@ For everything else, use the dedicated tool docs:
 
 Prerequisites:
 
-- Go 1.25.4 or newer
+- Go 1.26.4 or newer
 - RocksDB development headers and libraries when building `rdbsh` from source
 - macOS or Linux for the installer script
 
