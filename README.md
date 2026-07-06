@@ -12,6 +12,11 @@ The tools are intentionally plain: command-line input, direct output, and small 
 | `hello`   | Demo CLI that prints a friendly greeting.                                       | This README                          |
 | `ksetoff` | Bootstraps or resets Kafka consumer group offsets for a topic.                  | [`docs/ksetoff.md`](docs/ksetoff.md) |
 | `rdbsh`   | Inspect local RocksDB databases with an interactive shell or one-shot commands. | [`docs/rdbsh.md`](docs/rdbsh.md)     |
+| `hll`     | Estimate unique values in large streams with HyperLogLog.                      | [`docs/hll.md`](docs/hll.md)         |
+| `bf`      | Build and query Bloom filters for approximate membership tests.                 | [`docs/bf.md`](docs/bf.md)           |
+| `card`    | Profile approximate cardinality for CSV, JSON Lines, and delimited fields.      | [`docs/card.md`](docs/card.md)       |
+| `heavy`   | Find frequent values in large streams with bounded memory.                      | [`docs/heavy.md`](docs/heavy.md)     |
+| `sample`  | Sample streams randomly, deterministically, or by reservoir count.              | [`docs/sample.md`](docs/sample.md)   |
 
 ## Install
 
@@ -66,6 +71,11 @@ For everything else, use the dedicated tool docs:
 
 - [`docs/ksetoff.md`](docs/ksetoff.md)
 - [`docs/rdbsh.md`](docs/rdbsh.md)
+- [`docs/hll.md`](docs/hll.md)
+- [`docs/bf.md`](docs/bf.md)
+- [`docs/card.md`](docs/card.md)
+- [`docs/heavy.md`](docs/heavy.md)
+- [`docs/sample.md`](docs/sample.md)
 
 ## Behavior At A Glance
 
@@ -75,25 +85,47 @@ For everything else, use the dedicated tool docs:
 - `ksetoff -dry-run` prints the offset plan and does not commit offsets.
 - `rdbsh` opens databases read-only unless `--writable` is set.
 - `rdbsh export <file>` refuses to overwrite an existing file unless `--force` is set.
+- Probabilistic tools read from stdin by default and keep diagnostics on stderr.
+- `hll` and `bf` state files are binary, versioned, and checked before use.
 
 ## Repository Layout
 
 ```text
 .
 ├── cmd/
+│   ├── bf/
+│   │   └── main.go
+│   ├── card/
+│   │   └── main.go
+│   ├── heavy/
+│   │   └── main.go
 │   ├── hello/
+│   │   └── main.go
+│   ├── hll/
 │   │   └── main.go
 │   ├── ksetoff/
 │   │   └── main.go
-│   └── rdbsh/
+│   ├── rdbsh/
+│   │   └── main.go
+│   └── sample/
 │       └── main.go
 ├── docs/
+│   ├── bf.md
+│   ├── card.md
+│   ├── heavy.md
+│   ├── hll.md
 │   ├── ksetoff.md
-│   └── rdbsh.md
+│   ├── rdbsh.md
+│   └── sample.md
 ├── internal/
 │   ├── buildinfo/
+│   ├── bf/
+│   ├── card/
+│   ├── heavy/
 │   ├── hello/
+│   ├── hll/
 │   ├── ksetoff/
+│   ├── prob/
 │   └── rdbsh/
 │       └── rocksdb/
 ├── scripts/
@@ -107,7 +139,7 @@ For everything else, use the dedicated tool docs:
 
 Prerequisites:
 
-- Go 1.25.4 or newer
+- Go 1.26.4 or newer
 - RocksDB development headers and libraries when building `rdbsh` from source
 - macOS or Linux for the installer script
 
@@ -134,6 +166,7 @@ If RocksDB is not installed, run the pure-Go packages while working on unrelated
 
 ```sh
 go test ./internal/hello ./internal/ksetoff ./cmd/hello ./cmd/ksetoff
+go test ./internal/prob ./internal/hll ./internal/bf ./internal/card ./internal/heavy ./internal/sample ./cmd/hll ./cmd/bf ./cmd/card ./cmd/heavy ./cmd/sample
 ```
 
 For a full test run without installing RocksDB on the host, use Docker if a Docker runtime is available.
@@ -145,6 +178,11 @@ Run from source:
 make run-hello
 make run-ksetoff ARGS='-h'
 make run-rdbsh ARGS='--db /path/to/db'
+make run-hll ARGS='count values.txt'
+make run-bf ARGS='inspect known.bf'
+make run-card ARGS='--csv --columns user_id users.csv'
+make run-heavy ARGS='--top 20 values.txt'
+make run-sample ARGS='--rate 0.01 events.jsonl'
 ```
 
 Install from source:
@@ -153,6 +191,11 @@ Install from source:
 make install-hello
 make install-ksetoff
 make install-rdbsh
+make install-hll
+make install-bf
+make install-card
+make install-heavy
+make install-sample
 ```
 
 GitHub Actions:

@@ -39,7 +39,7 @@ if [ "$#" -eq 2 ]; then
 fi
 
 case "$CLI_NAME" in
-	hello|ksetoff|rdbsh)
+	hello|ksetoff|rdbsh|hll|bf|card|heavy|sample)
 		;;
 	*)
 		printf 'error: unsupported CLI: %s\n' "$CLI_NAME" >&2

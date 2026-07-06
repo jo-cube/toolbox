@@ -1,6 +1,6 @@
 module github.com/jo-cube/toolbox
 
-go 1.25.4
+go 1.26.4
 
 require (
 	github.com/twmb/franz-go v1.20.7

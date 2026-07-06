@@ -5,12 +5,14 @@ Keep changes small, verify the behavior you touched, and report any local setup 
 
 ## Repo Map
 
-- `cmd/hello`, `cmd/ksetoff`, `cmd/rdbsh`: CLI entrypoints and flag handling.
+- `cmd/hello`, `cmd/ksetoff`, `cmd/rdbsh`, `cmd/hll`, `cmd/bf`, `cmd/card`, `cmd/heavy`, `cmd/sample`: CLI entrypoints and flag handling.
 - `internal/buildinfo`: build-time version string.
 - `internal/hello`: demo command logic.
 - `internal/ksetoff`: Kafka config parsing, client setup, offset planning, display, and commits.
 - `internal/rdbsh`: shell commands, parsing, formatting, export behavior.
 - `internal/rdbsh/rocksdb`: narrow CGo wrapper around the RocksDB C API.
+- `internal/prob`: shared stream input and stable hashing helpers for probabilistic tools.
+- `internal/hll`, `internal/bf`, `internal/card`, `internal/heavy`, `internal/sample`: probabilistic stream tool logic.
 - `docs/`: user docs for the real tools.
 - `scripts/install.sh`: release installer.
 - `.github/workflows/`: CI and release packaging.
@@ -31,6 +33,7 @@ Run cheap checks first:
 gofmt -l .
 sh -n scripts/install.sh
 go test ./internal/hello ./internal/ksetoff ./cmd/hello ./cmd/ksetoff
+go test ./internal/prob ./internal/hll ./internal/bf ./internal/card ./internal/heavy ./internal/sample ./cmd/hll ./cmd/bf ./cmd/card ./cmd/heavy ./cmd/sample
 ```
 
 The full suite is:
@@ -65,7 +68,7 @@ docker run \
   --name toolbox-rocksdb-test \
   -v "$PWD:/work:ro" \
   -w /work \
-  golang:1.25-bookworm \
+  golang:1.26-bookworm \
   bash -lc 'export DEBIAN_FRONTEND=noninteractive; apt-get update -qq >/dev/null && apt-get install -y -qq librocksdb-dev >/dev/null && /usr/local/go/bin/go test ./...'
 ```
 
@@ -87,7 +90,7 @@ Cleanup commands for the example names above:
 
 ```sh
 docker rm toolbox-rocksdb-test
-docker rmi golang:1.25-bookworm
+docker rmi golang:1.26-bookworm
 ```
 
 If a temporary local image was created from a prepared container, remove dependent containers before removing the image:
@@ -95,7 +98,7 @@ If a temporary local image was created from a prepared container, remove depende
 ```sh
 docker rm <container-name>
 docker rmi <temporary-image-name>
-docker rmi golang:1.25-bookworm
+docker rmi golang:1.26-bookworm
 ```
 
 If you create additional containers or temporary images, list them and include matching cleanup commands in your final message.

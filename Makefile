@@ -8,13 +8,18 @@ ROCKSDB_CGO_CFLAGS ?= $(shell if command -v pkg-config >/dev/null 2>&1 && pkg-co
 ROCKSDB_CGO_LDFLAGS ?= $(shell if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists rocksdb; then pkg-config --libs rocksdb; elif [ -n "$(ROCKSDB_PREFIX)" ]; then printf '%s' '-L$(ROCKSDB_PREFIX)/lib -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd'; fi)
 RDBSH_ENV = CGO_ENABLED=1 CGO_CFLAGS='$(ROCKSDB_CGO_CFLAGS)' CGO_LDFLAGS='$(ROCKSDB_CGO_LDFLAGS)'
 
-.PHONY: build test run-hello run-ksetoff run-rdbsh install-hello install-ksetoff install-rdbsh clean
+.PHONY: build test run-hello run-ksetoff run-rdbsh run-hll run-bf run-card run-heavy run-sample install-hello install-ksetoff install-rdbsh install-hll install-bf install-card install-heavy install-sample clean
 
 build:
 	@mkdir -p "$(BIN_DIR)"
 	$(GO) build -ldflags '$(LDFLAGS)' -o "$(BIN_DIR)/hello" ./cmd/hello
 	$(GO) build -ldflags '$(LDFLAGS)' -o "$(BIN_DIR)/ksetoff" ./cmd/ksetoff
 	$(RDBSH_ENV) $(GO) build -ldflags '$(LDFLAGS)' -o "$(BIN_DIR)/rdbsh" ./cmd/rdbsh
+	$(GO) build -ldflags '$(LDFLAGS)' -o "$(BIN_DIR)/hll" ./cmd/hll
+	$(GO) build -ldflags '$(LDFLAGS)' -o "$(BIN_DIR)/bf" ./cmd/bf
+	$(GO) build -ldflags '$(LDFLAGS)' -o "$(BIN_DIR)/card" ./cmd/card
+	$(GO) build -ldflags '$(LDFLAGS)' -o "$(BIN_DIR)/heavy" ./cmd/heavy
+	$(GO) build -ldflags '$(LDFLAGS)' -o "$(BIN_DIR)/sample" ./cmd/sample
 
 test:
 	$(GO) test ./...
@@ -28,6 +33,21 @@ run-ksetoff:
 run-rdbsh:
 	$(RDBSH_ENV) $(GO) run -ldflags '$(LDFLAGS)' ./cmd/rdbsh $(ARGS)
 
+run-hll:
+	$(GO) run -ldflags '$(LDFLAGS)' ./cmd/hll $(ARGS)
+
+run-bf:
+	$(GO) run -ldflags '$(LDFLAGS)' ./cmd/bf $(ARGS)
+
+run-card:
+	$(GO) run -ldflags '$(LDFLAGS)' ./cmd/card $(ARGS)
+
+run-heavy:
+	$(GO) run -ldflags '$(LDFLAGS)' ./cmd/heavy $(ARGS)
+
+run-sample:
+	$(GO) run -ldflags '$(LDFLAGS)' ./cmd/sample $(ARGS)
+
 install-hello:
 	@mkdir -p "$(LOCAL_BIN)"
 	GOBIN="$(LOCAL_BIN)" $(GO) install -ldflags '$(LDFLAGS)' ./cmd/hello
@@ -39,6 +59,26 @@ install-ksetoff:
 install-rdbsh:
 	@mkdir -p "$(LOCAL_BIN)"
 	$(RDBSH_ENV) GOBIN="$(LOCAL_BIN)" $(GO) install -ldflags '$(LDFLAGS)' ./cmd/rdbsh
+
+install-hll:
+	@mkdir -p "$(LOCAL_BIN)"
+	GOBIN="$(LOCAL_BIN)" $(GO) install -ldflags '$(LDFLAGS)' ./cmd/hll
+
+install-bf:
+	@mkdir -p "$(LOCAL_BIN)"
+	GOBIN="$(LOCAL_BIN)" $(GO) install -ldflags '$(LDFLAGS)' ./cmd/bf
+
+install-card:
+	@mkdir -p "$(LOCAL_BIN)"
+	GOBIN="$(LOCAL_BIN)" $(GO) install -ldflags '$(LDFLAGS)' ./cmd/card
+
+install-heavy:
+	@mkdir -p "$(LOCAL_BIN)"
+	GOBIN="$(LOCAL_BIN)" $(GO) install -ldflags '$(LDFLAGS)' ./cmd/heavy
+
+install-sample:
+	@mkdir -p "$(LOCAL_BIN)"
+	GOBIN="$(LOCAL_BIN)" $(GO) install -ldflags '$(LDFLAGS)' ./cmd/sample
 
 clean:
 	rm -rf "$(BIN_DIR)"
