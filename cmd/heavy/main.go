@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"text/tabwriter"
 
 	"github.com/jo-cube/toolbox/internal/buildinfo"
@@ -23,7 +24,19 @@ func main() {
 	prob.AddInputFlags(flag.CommandLine, &input)
 
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [options] [file...]\n", os.Args[0])
+		name := filepath.Base(os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), `Usage: %s [options] [file...]
+
+Find frequent values in newline-delimited input.
+Default mode uses bounded-memory approximate counts. Use --exact only when all distinct values fit in memory.
+
+Examples:
+  awk '{print $7}' access.log | heavy --top 20
+  jq -r .tenant_id events.jsonl | heavy --top 50 --json
+  heavy --top 20 --exact values.txt
+
+Options:
+`, name)
 		flag.PrintDefaults()
 	}
 	flag.Parse()

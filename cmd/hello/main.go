@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/jo-cube/toolbox/internal/buildinfo"
 	"github.com/jo-cube/toolbox/internal/hello"
@@ -12,10 +13,16 @@ import (
 func main() {
 	showVersion := flag.Bool("version", false, "print version information")
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [--version]\n", os.Args[0])
-		fmt.Fprintln(flag.CommandLine.Output())
-		fmt.Fprintln(flag.CommandLine.Output(), "Prints a friendly greeting.")
-		fmt.Fprintln(flag.CommandLine.Output())
+		fmt.Fprintf(flag.CommandLine.Output(), `Usage: %s [--version]
+
+Print a friendly greeting. This is the smallest reference CLI in toolbox.
+
+Examples:
+  hello
+  hello --version
+
+Options:
+`, filepath.Base(os.Args[0]))
 		flag.PrintDefaults()
 	}
 	flag.Parse()

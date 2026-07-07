@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -23,22 +24,27 @@ func main() {
 	timeout := flag.Duration("timeout", 30*time.Second, "overall operation timeout")
 
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s -F <config> -group <group-id> -topic <topic> -offset <spec> [options]\n\n", os.Args[0])
-		fmt.Fprintln(flag.CommandLine.Output(), "Bootstrap a Kafka consumer group to specific offsets.")
-		fmt.Fprintln(flag.CommandLine.Output())
-		fmt.Fprintln(flag.CommandLine.Output(), "Offset spec:")
-		fmt.Fprintln(flag.CommandLine.Output(), "  <number>                  Exact numeric offset (e.g. 42)")
-		fmt.Fprintln(flag.CommandLine.Output(), "  earliest                  Beginning of each partition")
-		fmt.Fprintln(flag.CommandLine.Output(), "  latest                    End of each partition (high watermark)")
-		fmt.Fprintln(flag.CommandLine.Output(), "  timestamp:<ISO-8601>      Offset at a specific time (e.g. timestamp:2026-04-13T00:00:00Z)")
-		fmt.Fprintln(flag.CommandLine.Output())
-		fmt.Fprintln(flag.CommandLine.Output(), "Config file format (kcat/librdkafka key=value):")
-		fmt.Fprintln(flag.CommandLine.Output(), "  bootstrap.servers=broker1:9092,broker2:9092")
-		fmt.Fprintln(flag.CommandLine.Output(), "  security.protocol=SASL_SSL")
-		fmt.Fprintln(flag.CommandLine.Output(), "  sasl.mechanism=PLAIN")
-		fmt.Fprintln(flag.CommandLine.Output(), "  sasl.username=my-user")
-		fmt.Fprintln(flag.CommandLine.Output(), "  sasl.password=my-password")
-		fmt.Fprintln(flag.CommandLine.Output())
+		fmt.Fprintf(flag.CommandLine.Output(), `Usage: %s -F <config> -group <group-id> -topic <topic> -offset <spec> [options]
+
+Set Kafka consumer group offsets without starting the consumer application.
+
+Examples:
+  ksetoff -F kafka.conf -group my-cg -topic events -offset latest -dry-run
+  ksetoff -F kafka.conf -group my-cg -topic events -offset earliest
+  ksetoff -F kafka.conf -group my-cg -topic events -offset timestamp:2026-04-13T00:00:00Z
+
+Offset specs:
+  <number>                  Exact numeric offset, such as 42.
+  earliest                  Beginning of each partition.
+  latest                    End of each partition.
+  timestamp:<ISO-8601>      First offset at or after a timestamp.
+
+Notes:
+  Run with -dry-run first. The plan is written to stdout; warnings go to stderr.
+  The config file uses kcat/librdkafka key=value settings such as bootstrap.servers.
+
+Options:
+`, filepath.Base(os.Args[0]))
 		flag.PrintDefaults()
 	}
 

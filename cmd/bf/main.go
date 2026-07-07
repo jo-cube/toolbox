@@ -51,7 +51,24 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "Usage: bf <build|test|inspect|union> [options]")
+	fmt.Fprint(os.Stderr, `Usage: bf <command> [options]
+
+Build and query Bloom filters for approximate membership tests.
+False positives are possible. False negatives should not occur unless a filter is corrupted or misused.
+
+Commands:
+  build      Read values and write a binary .bf filter to stdout.
+  test       Emit values that are probably present, or definitely absent with --invert.
+  inspect    Print .bf metadata.
+  union      Combine compatible .bf filters and write a filter to stdout.
+
+Examples:
+  cat known.txt | bf build --expected-items 1000000 --false-positive-rate 0.001 > known.bf
+  cat candidates.txt | bf test known.bf
+  cat candidates.txt | bf test --invert known.bf
+
+Run "bf <command> -h" for command-specific flags.
+`)
 }
 
 func build(args []string) error {
@@ -60,6 +77,16 @@ func build(args []string) error {
 	rate := fs.Float64("false-positive-rate", 0, "target false-positive rate")
 	var input prob.InputOptions
 	prob.AddInputFlags(fs, &input)
+	fs.Usage = func() {
+		fmt.Fprint(fs.Output(), `Usage: bf build --expected-items <n> --false-positive-rate <p> [file...] > filter.bf
+
+Read values from files or stdin and write a binary Bloom filter to stdout.
+Sizing flags are required because they determine memory use and false-positive behavior.
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -82,6 +109,17 @@ func test(args []string) error {
 	invert := fs.Bool("invert", false, "emit definitely absent items")
 	var input prob.InputOptions
 	prob.AddInputFlags(fs, &input)
+	fs.Usage = func() {
+		fmt.Fprint(fs.Output(), `Usage: bf test [--invert] <filter.bf> [file...]
+
+Read candidates from files or stdin.
+Default output is values probably present in the filter.
+With --invert, output is values definitely absent from the filter.
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -106,6 +144,15 @@ func test(args []string) error {
 func inspect(args []string) error {
 	fs := flag.NewFlagSet("bf inspect", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "write JSON output")
+	fs.Usage = func() {
+		fmt.Fprint(fs.Output(), `Usage: bf inspect [--json] <filter.bf>
+
+Print Bloom filter metadata, including expected items, inserted items, bit count, and hash count.
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -134,6 +181,13 @@ func inspect(args []string) error {
 
 func union(args []string) error {
 	fs := flag.NewFlagSet("bf union", flag.ExitOnError)
+	fs.Usage = func() {
+		fmt.Fprint(fs.Output(), `Usage: bf union <filter.bf> <filter.bf>... > combined.bf
+
+Union compatible Bloom filters and write a binary filter to stdout.
+Filters must have compatible bit count, hash count, false-positive rate, version, and hash metadata.
+`)
+	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
