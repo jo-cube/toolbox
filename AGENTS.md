@@ -7,13 +7,13 @@ Keep changes small, verify the behavior you touched, and report any local setup 
 
 - `cmd/hello`, `cmd/ksetoff`, `cmd/rdbsh`, `cmd/hll`, `cmd/bf`, `cmd/card`, `cmd/heavy`, `cmd/sample`: CLI entrypoints and flag handling.
 - `internal/buildinfo`: build-time version string.
-- `internal/hello`: demo command logic.
+- `internal/hello`: minimal reference CLI behavior.
 - `internal/ksetoff`: Kafka config parsing, client setup, offset planning, display, and commits.
 - `internal/rdbsh`: shell commands, parsing, formatting, export behavior.
 - `internal/rdbsh/rocksdb`: narrow CGo wrapper around the RocksDB C API.
 - `internal/prob`: shared stream input and stable hashing helpers for probabilistic tools.
 - `internal/hll`, `internal/bf`, `internal/card`, `internal/heavy`, `internal/sample`: probabilistic stream tool logic.
-- `docs/`: user docs for the real tools.
+- `docs/`: user docs, contributor notes, and shared tool behavior.
 - `scripts/install.sh`: release installer.
 - `.github/workflows/`: CI and release packaging.
 
@@ -24,6 +24,7 @@ Keep changes small, verify the behavior you touched, and report any local setup 
 - Keep comments rare. Use names, small functions, and tests to explain ordinary behavior.
 - Tests should freeze user-visible behavior and meaningful edge cases.
 - Docs should be direct, accurate, and useful. Avoid hype, slogans, and feature marketing.
+- Use `docs/development.md` for contributor-facing implementation context that would clutter the root README.
 
 ## Local Checks
 
