@@ -16,13 +16,13 @@ It is meant for deliberate offset changes. Run a dry run first, read the plan, t
 Install the latest release:
 
 ```sh
-./scripts/install.sh ksetoff
+curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | sh -s -- ksetoff
 ```
 
-Install without cloning the repo:
+Install from a cloned repo:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | sh -s -- ksetoff
+./scripts/install.sh ksetoff
 ```
 
 Check the installed version:
@@ -31,14 +31,17 @@ Check the installed version:
 ksetoff --version
 ```
 
-## Quick Start
+## Synopsis
 
-1. Create or locate a Kafka config file in kcat or librdkafka `key=value` format.
-2. Run `ksetoff` in `-dry-run` mode first.
-3. Review the plan and any warnings.
-4. Re-run without `-dry-run` to commit offsets.
+```sh
+ksetoff -F <config> -group <group-id> -topic <topic> -offset <spec> [options]
+```
 
-Example dry run:
+## Examples
+
+Create or locate a Kafka config file in kcat or librdkafka `key=value` format, then run a dry run first.
+
+Preview an offset reset:
 
 ```sh
 ksetoff \
@@ -49,7 +52,7 @@ ksetoff \
   -dry-run
 ```
 
-Commit the change:
+Commit the same change:
 
 ```sh
 ksetoff \
@@ -58,8 +61,6 @@ ksetoff \
   -topic my-topic \
   -offset latest
 ```
-
-## Common Workflows
 
 Set a group to the earliest available offset:
 
@@ -97,11 +98,7 @@ Preview the change without committing:
 ksetoff -F kafka.conf -group my-cg -topic my-topic -offset latest -dry-run
 ```
 
-## Command Reference
-
-```sh
-ksetoff -F <config> -group <group-id> -topic <topic> -offset <spec> [options]
-```
+## Options
 
 Required flags:
 
@@ -116,6 +113,8 @@ Optional flags:
 - `-dry-run`: print the plan without committing offsets
 - `-timeout`: overall operation timeout; defaults to `30s`
 - `--version`: print version information
+
+## Offset Specs
 
 Supported offset specs:
 
@@ -180,7 +179,7 @@ Notes:
 - If you use mTLS, both `ssl.certificate.location` and `ssl.key.location` must be set.
 - Encrypted private keys are not currently supported. If `ssl.key.password` is set, `ksetoff` returns a clear error.
 
-## What Output To Expect
+## Output
 
 `ksetoff` prints a plan showing:
 
@@ -197,14 +196,18 @@ Warnings are printed when a requested offset is outside the available range.
 - If the requested offset is above the high watermark, the consumer will wait for new messages.
 - If a timestamp is after the last message in a partition, `ksetoff` uses that partition's high watermark.
 
-## Automation Notes
+Automation behavior:
 
-- Usage errors exit with status `2`.
-- Runtime errors exit with status `1`.
 - The offset plan is written to stdout.
 - Connection status and warnings are written to stderr.
 - `-dry-run` never calls Kafka's offset commit API.
 - A non-dry run commits offsets only after metadata, watermarks, timestamp lookups, and the displayed plan are resolved.
+
+## Exit Status
+
+- `0`: success
+- `1`: runtime error
+- `2`: invalid command-line usage
 
 ## Safety Notes
 
@@ -230,3 +233,9 @@ The offsets look unexpected:
 - Re-run with `-dry-run`.
 - Verify the timestamp and timezone used in `timestamp:<ISO-8601>`.
 - Compare the planned offsets against the topic watermarks shown in the output.
+
+## Contributor Notes
+
+- CLI flags and process exit behavior live in `cmd/ksetoff/main.go`.
+- Config parsing, offset specs, offset planning, display, and commits live in `internal/ksetoff`.
+- Keep dry-run behavior easy to reach and easy to read; this tool changes Kafka consumer group state.
