@@ -107,4 +107,4 @@ If you create additional containers or temporary images, list them and include m
 ## Release Notes
 
 Release assets are built by GitHub Actions and downloaded by `scripts/install.sh`.
-Checksums and signatures are not currently implemented. Discuss the desired trust model before adding them.
+The installer verifies release archives against SHA256 checksum assets.

@@ -40,7 +40,7 @@ func TestFormatBytes(t *testing.T) {
 	}{
 		{name: "empty", data: nil, want: "(empty)"},
 		{name: "ascii", data: []byte("hello"), want: "hello"},
-		{name: "binary", data: []byte{0x00, 0x01, 0xAB}, want: "0001ab"},
+		{name: "binary", data: []byte{0x00, 0x01, 0xAB}, want: "0x0001ab"},
 	}
 
 	for _, tt := range tests {

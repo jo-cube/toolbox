@@ -125,16 +125,35 @@ case "$VERSION" in
 		DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${ASSET_NAME}"
 		;;
 esac
+CHECKSUM_URL="${DOWNLOAD_URL}.sha256"
+CHECKSUM_PATH="${ARCHIVE_PATH}.sha256"
 
 printf 'Downloading %s from %s\n' "$ASSET_NAME" "$DOWNLOAD_URL"
 case "$DOWNLOAD_TOOL" in
 	curl)
 		curl -fsSL "$DOWNLOAD_URL" -o "$ARCHIVE_PATH"
+		curl -fsSL "$CHECKSUM_URL" -o "$CHECKSUM_PATH"
 		;;
 	wget)
 		wget -qO "$ARCHIVE_PATH" "$DOWNLOAD_URL"
+		wget -qO "$CHECKSUM_PATH" "$CHECKSUM_URL"
 		;;
 esac
+
+printf 'Verifying checksum\n'
+EXPECTED_SHA="$(awk '{print $1}' "$CHECKSUM_PATH")"
+if command -v sha256sum >/dev/null 2>&1; then
+	ACTUAL_SHA="$(sha256sum "$ARCHIVE_PATH" | awk '{print $1}')"
+elif command -v shasum >/dev/null 2>&1; then
+	ACTUAL_SHA="$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')"
+else
+	printf 'error: sha256sum or shasum is required to verify release assets\n' >&2
+	exit 1
+fi
+if [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
+	printf 'error: checksum mismatch for %s\n' "$ASSET_NAME" >&2
+	exit 1
+fi
 
 mkdir -p "$INSTALL_DIR"
 if [ "$(tar -tzf "$ARCHIVE_PATH")" != "$CLI_NAME" ]; then

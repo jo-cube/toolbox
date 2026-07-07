@@ -143,7 +143,7 @@ Rules:
 - Use double quotes for arguments containing spaces
 - Use `\` to escape spaces or quotes in the shell
 
-Printable bytes are shown as text. Non-printable bytes are shown as lowercase hex. Empty values are shown as `(empty)`.
+Printable bytes are shown as text. Non-printable bytes are shown as `0x`-prefixed lowercase hex. Empty values are shown as `(empty)`.
 
 ## Export Formats
 
@@ -158,8 +158,8 @@ JSON export writes an array of objects in this shape:
 ```json
 [
   {
-    "key": "00000001",
-    "value": "0000000000209163"
+    "key": "0x00000001",
+    "value": "0x0000000000209163"
   }
 ]
 ```

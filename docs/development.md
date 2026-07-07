@@ -124,7 +124,7 @@ GitHub Actions:
 - build and test on pushes and pull requests
 - cross-build pure Go binaries for Linux on `amd64` and `arm64`, plus macOS `arm64`
 - build native `rdbsh` binaries for Linux on `amd64` and `arm64`, plus macOS `arm64`
-- publish tarball release assets when a `v*` tag is pushed
+- publish tarball release assets and matching SHA256 checksum files when a `v*` tag is pushed
 
 Release assets are downloaded by `scripts/install.sh`.
-Checksums and signatures are not currently implemented; discuss the desired trust model before adding them.
+The installer verifies SHA256 checksums before extracting archives.

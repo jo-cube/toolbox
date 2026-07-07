@@ -89,12 +89,18 @@ Options:
 		usageError("at least one JSON path is required")
 	}
 
+	p, err := hll.Precision(*precision)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "card: %v\n", err)
+		os.Exit(2)
+	}
+
 	profiles, err := card.Run(paths, card.Config{
 		Mode:      mode,
 		Columns:   splitList(*columnsRaw),
 		JSONPaths: jsonPaths,
 		Delimiter: *delimiter,
-		Precision: uint8(*precision),
+		Precision: p,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "card: %v\n", err)
