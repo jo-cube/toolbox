@@ -6,10 +6,25 @@ import (
 	"testing"
 )
 
-func TestCSVProfile(t *testing.T) {
+const csvUsers = `user_id,country
+u1,US
+u2,CA
+u1,
+`
+
+const jsonEvents = `{"user_id":"u1","country":"US"}
+{"user_id":"u2","country":null}
+{"user_id":"u1"}
+`
+
+const commaDelimitedPairs = `a,b
+c,d
+`
+
+func TestCSVProfileCountsDistinctValuesAndEmptyFields(t *testing.T) {
 	t.Parallel()
 
-	path := writeInput(t, "user_id,country\nu1,US\nu2,CA\nu1,\n")
+	path := writeInput(t, csvUsers)
 	got, err := Run([]string{path}, Config{Mode: "csv", Columns: []string{"user_id", "country"}, Precision: 8})
 	if err != nil {
 		t.Fatal(err)
@@ -22,10 +37,10 @@ func TestCSVProfile(t *testing.T) {
 	}
 }
 
-func TestJSONProfile(t *testing.T) {
+func TestJSONProfileCountsNullMissingAndDistinctValues(t *testing.T) {
 	t.Parallel()
 
-	path := writeInput(t, `{"user_id":"u1","country":"US"}`+"\n"+`{"user_id":"u2","country":null}`+"\n"+`{"user_id":"u1"}`+"\n")
+	path := writeInput(t, jsonEvents)
 	got, err := Run([]string{path}, Config{Mode: "json", JSONPaths: []string{".user_id", ".country"}, Precision: 8})
 	if err != nil {
 		t.Fatal(err)
@@ -38,7 +53,7 @@ func TestJSONProfile(t *testing.T) {
 func TestDelimitedColumnsAreOneBased(t *testing.T) {
 	t.Parallel()
 
-	path := writeInput(t, "a,b\nc,d\n")
+	path := writeInput(t, commaDelimitedPairs)
 	got, err := Run([]string{path}, Config{Mode: "delimiter", Delimiter: ",", Columns: []string{"2"}, Precision: 8})
 	if err != nil {
 		t.Fatal(err)

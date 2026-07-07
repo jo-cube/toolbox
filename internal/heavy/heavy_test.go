@@ -6,10 +6,30 @@ import (
 	"testing"
 )
 
-func TestExactTop(t *testing.T) {
+const repeatedLetters = `b
+a
+b
+c
+b
+a
+`
+
+const streamWithOneDominantItem = `x
+x
+x
+x
+x
+x
+x
+x
+a
+b
+`
+
+func TestExactModeRanksByObservedCounts(t *testing.T) {
 	t.Parallel()
 
-	path := writeInput(t, "b\na\nb\nc\nb\na\n")
+	path := writeInput(t, repeatedLetters)
 	got, err := Run([]string{path}, Config{Top: 2, Exact: true})
 	if err != nil {
 		t.Fatal(err)
@@ -22,7 +42,7 @@ func TestExactTop(t *testing.T) {
 func TestApproximateKeepsHeavyItem(t *testing.T) {
 	t.Parallel()
 
-	path := writeInput(t, "x\nx\nx\nx\nx\nx\nx\nx\na\nb\n")
+	path := writeInput(t, streamWithOneDominantItem)
 	got, err := Run([]string{path}, Config{Top: 1, Capacity: 2})
 	if err != nil {
 		t.Fatal(err)

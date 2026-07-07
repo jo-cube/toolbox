@@ -6,11 +6,12 @@ import (
 	"testing"
 )
 
-func TestEachReaderTrimIgnoreEmpty(t *testing.T) {
+func TestEachReaderCanTrimAndIgnoreEmptyLines(t *testing.T) {
 	t.Parallel()
 
 	var got []string
-	err := eachReader("test", strings.NewReader(" a \n\nb\n"), InputOptions{Trim: true, IgnoreEmpty: true}, func(item []byte) error {
+	spacedLines := strings.Join([]string{" a ", "", "b"}, "\n") + "\n"
+	err := eachReader("test", strings.NewReader(spacedLines), InputOptions{Trim: true, IgnoreEmpty: true}, func(item []byte) error {
 		got = append(got, string(item))
 		return nil
 	})
@@ -26,7 +27,8 @@ func TestEachReaderNULDelimited(t *testing.T) {
 	t.Parallel()
 
 	var got []string
-	err := eachReader("test", strings.NewReader("a\x00b\x00"), InputOptions{NUL: true}, func(item []byte) error {
+	input := string([]byte{'a', 0, 'b', 0})
+	err := eachReader("test", strings.NewReader(input), InputOptions{NUL: true}, func(item []byte) error {
 		got = append(got, string(item))
 		return nil
 	})
