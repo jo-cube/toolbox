@@ -289,18 +289,27 @@ func eachPath(paths []string, fn func(string, io.Reader) error) error {
 
 func eachLine(paths []string, fn func(string) error) error {
 	return eachPath(paths, func(name string, r io.Reader) error {
-		scanner := bufio.NewScanner(r)
-		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		br := bufio.NewReader(r)
 		line := 0
-		for scanner.Scan() {
+		for {
+			text, err := br.ReadString('\n')
+			if len(text) > 0 {
+				text = strings.TrimSuffix(text, "\n")
+				text = strings.TrimSuffix(text, "\r")
+			}
+			if len(text) == 0 && err == io.EOF {
+				return nil
+			}
 			line++
-			if err := fn(scanner.Text()); err != nil {
+			if err := fn(text); err != nil {
 				return fmt.Errorf("%s:%d: %w", name, line, err)
 			}
+			if err == io.EOF {
+				return nil
+			}
+			if err != nil {
+				return fmt.Errorf("%s: %w", name, err)
+			}
 		}
-		if err := scanner.Err(); err != nil {
-			return fmt.Errorf("%s: %w", name, err)
-		}
-		return nil
 	})
 }

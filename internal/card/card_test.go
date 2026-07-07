@@ -3,6 +3,7 @@ package card
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -47,6 +48,20 @@ func TestJSONProfileCountsNullMissingAndDistinctValues(t *testing.T) {
 	}
 	if got[0].ApproxUnique != 2 || got[1].Nulls != 1 || got[1].Missing != 1 {
 		t.Fatalf("Run() = %#v", got)
+	}
+}
+
+func TestJSONProfileHandlesLongLines(t *testing.T) {
+	t.Parallel()
+
+	longValue := strings.Repeat("x", 1024*1024+1)
+	path := writeInput(t, `{"message":"`+longValue+`"}`+"\n")
+	got, err := Run([]string{path}, Config{Mode: "json", JSONPaths: []string{".message"}, Precision: 8})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].ApproxUnique != 1 || got[0].Total != 1 {
+		t.Fatalf("message profile = %#v", got[0])
 	}
 }
 
