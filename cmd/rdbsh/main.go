@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/jo-cube/toolbox/internal/buildinfo"
@@ -19,14 +20,26 @@ func main() {
 	force := flag.Bool("force", false, "allow export to overwrite an existing file")
 
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s --db <path> [options]\n\n", os.Args[0])
-		fmt.Fprintln(flag.CommandLine.Output(), "Inspect a local RocksDB database interactively or by running a single command.")
-		fmt.Fprintln(flag.CommandLine.Output())
-		fmt.Fprintln(flag.CommandLine.Output(), "Examples:")
-		fmt.Fprintln(flag.CommandLine.Output(), "  rdbsh --db /tmp/offsetstorage")
-		fmt.Fprintln(flag.CommandLine.Output(), "  rdbsh --db /tmp/offsetstorage --writable")
-		fmt.Fprintln(flag.CommandLine.Output(), "  rdbsh --db /tmp/offsetstorage --cf offsets --exec \"count 0x00\"")
-		fmt.Fprintln(flag.CommandLine.Output())
+		fmt.Fprintf(flag.CommandLine.Output(), `Usage: %s --db <path> [options]
+
+Inspect a local RocksDB database interactively or by running a single command.
+Databases are opened read-only unless --writable is set.
+
+Examples:
+  rdbsh --db /tmp/offsetstorage
+  rdbsh --db /tmp/offsetstorage --exec "get 0x00000001"
+  rdbsh --db /tmp/offsetstorage --cf offsets --exec "count 0x00"
+  rdbsh --db /tmp/offsetstorage --exec "export - json 0x00"
+
+Shell commands:
+  get, put, delete, scan, keys, count, stats, export, cfs, help, exit
+
+Notes:
+  put and delete require --writable.
+  export <file> refuses to overwrite unless --force is set.
+
+Options:
+`, filepath.Base(os.Args[0]))
 		flag.PrintDefaults()
 	}
 

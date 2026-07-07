@@ -51,7 +51,24 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: hll <count|build|estimate|merge|inspect> [options]\n")
+	fmt.Fprint(os.Stderr, `Usage: hll <command> [options]
+
+Estimate distinct values with HyperLogLog.
+
+Commands:
+  count       Read values and print an approximate unique count.
+  build       Read values and write a binary .hll sketch to stdout.
+  estimate    Read a .hll sketch and print its approximate unique count.
+  merge       Merge compatible .hll sketches and write a sketch to stdout.
+  inspect     Print .hll metadata and estimate.
+
+Examples:
+  jq -r .user_id events.jsonl | hll count
+  jq -r .user_id events.jsonl | hll build > users.hll
+  hll merge monday.hll tuesday.hll > week.hll
+
+Run "hll <command> -h" for command-specific flags.
+`)
 }
 
 func count(args []string) error {
@@ -60,6 +77,19 @@ func count(args []string) error {
 	jsonOut := fs.Bool("json", false, "write JSON output")
 	var input prob.InputOptions
 	prob.AddInputFlags(fs, &input)
+	fs.Usage = func() {
+		fmt.Fprint(fs.Output(), `Usage: hll count [options] [file...]
+
+Read newline-delimited values from files or stdin and print an approximate unique count.
+Empty lines and surrounding whitespace are significant unless input flags change that.
+
+Example:
+  awk '{print $1}' access.log | hll count --ignore-empty
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -82,6 +112,16 @@ func build(args []string) error {
 	precision := fs.Uint("precision", uint(hll.DefaultP), "HLL precision, 4..20")
 	var input prob.InputOptions
 	prob.AddInputFlags(fs, &input)
+	fs.Usage = func() {
+		fmt.Fprint(fs.Output(), `Usage: hll build [options] [file...] > file.hll
+
+Read values from files or stdin and write a binary HyperLogLog sketch to stdout.
+Redirect stdout to save the sketch.
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -102,6 +142,15 @@ func build(args []string) error {
 func estimate(args []string) error {
 	fs := flag.NewFlagSet("hll estimate", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "write JSON output")
+	fs.Usage = func() {
+		fmt.Fprint(fs.Output(), `Usage: hll estimate [--json] <file.hll>
+
+Read a binary HLL sketch and print its approximate unique count.
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -118,6 +167,13 @@ func estimate(args []string) error {
 
 func merge(args []string) error {
 	fs := flag.NewFlagSet("hll merge", flag.ExitOnError)
+	fs.Usage = func() {
+		fmt.Fprint(fs.Output(), `Usage: hll merge <file.hll> <file.hll>... > merged.hll
+
+Merge compatible HLL sketches and write a binary sketch to stdout.
+Sketches must use compatible precision, register count, version, and hash metadata.
+`)
+	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -144,6 +200,15 @@ func merge(args []string) error {
 func inspect(args []string) error {
 	fs := flag.NewFlagSet("hll inspect", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "write JSON output")
+	fs.Usage = func() {
+		fmt.Fprint(fs.Output(), `Usage: hll inspect [--json] <file.hll>
+
+Print HLL state-file metadata, including precision, hash name, and estimate.
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}

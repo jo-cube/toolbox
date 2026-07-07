@@ -1,47 +1,37 @@
 # toolbox
 
-`toolbox` is a small Go monorepo for command-line utilities.
+`toolbox` is a small collection of command-line tools released as separate binaries.
 
-Each tool is released as its own binary. Most users will install the specific tool they need and run it locally.
-The tools are intentionally plain: command-line input, direct output, and small docs for the behavior that matters.
-
-## Tools
-
-| Tool      | What it does                                                                    | Docs                                 |
-|-----------|---------------------------------------------------------------------------------|--------------------------------------|
-| `hello`   | Demo CLI that prints a friendly greeting.                                       | This README                          |
-| `ksetoff` | Bootstraps or resets Kafka consumer group offsets for a topic.                  | [`docs/ksetoff.md`](docs/ksetoff.md) |
-| `rdbsh`   | Inspect local RocksDB databases with an interactive shell or one-shot commands. | [`docs/rdbsh.md`](docs/rdbsh.md)     |
-| `hll`     | Estimate unique values in large streams with HyperLogLog.                      | [`docs/hll.md`](docs/hll.md)         |
-| `bf`      | Build and query Bloom filters for approximate membership tests.                 | [`docs/bf.md`](docs/bf.md)           |
-| `card`    | Profile approximate cardinality for CSV, JSON Lines, and delimited fields.      | [`docs/card.md`](docs/card.md)       |
-| `heavy`   | Find frequent values in large streams with bounded memory.                      | [`docs/heavy.md`](docs/heavy.md)     |
-| `sample`  | Sample streams randomly, deterministically, or by reservoir count.              | [`docs/sample.md`](docs/sample.md)   |
+Each tool is meant to be installed and used directly. Some tools inspect local systems such as Kafka or RocksDB; others process streams in ordinary shell pipelines.
 
 ## Install
 
 Install the latest release of a tool:
 
 ```sh
-./scripts/install.sh ksetoff
+curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | sh -s -- <tool>
+```
+
+Valid tool names: `hello`, `ksetoff`, `rdbsh`, `hll`, `bf`, `card`, `heavy`, `sample`.
+
+For example:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | sh -s -- ksetoff
+curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | sh -s -- rdbsh
+curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | sh -s -- hll
 ```
 
 Install to a custom directory:
 
 ```sh
-./scripts/install.sh ksetoff "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | sh -s -- hll "$HOME/bin"
 ```
 
 Install a specific release version:
 
 ```sh
-VERSION=v0.1.0 ./scripts/install.sh ksetoff
-```
-
-Install without cloning the repository:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | sh -s -- ksetoff
+curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | VERSION=v0.1.0 sh -s -- hll
 ```
 
 Release binaries are published for:
@@ -50,104 +40,78 @@ Release binaries are published for:
 - `linux/arm64`
 - `darwin/arm64`
 
-Release asset names follow this pattern:
+## Tools
 
-```text
-<tool>_linux_amd64.tar.gz
-<tool>_linux_arm64.tar.gz
-<tool>_darwin_arm64.tar.gz
-```
+| Tool | What it does | Docs |
+| --- | --- | --- |
+| `hello` | Minimal reference CLI used as the simplest implementation example. | [`docs/hello.md`](docs/hello.md) |
+| `ksetoff` | Set Kafka consumer group offsets for a topic without starting the consumer app. | [`docs/ksetoff.md`](docs/ksetoff.md) |
+| `rdbsh` | Inspect local RocksDB databases interactively or with one-shot commands. | [`docs/rdbsh.md`](docs/rdbsh.md) |
+| `hll` | Estimate unique values in large streams with HyperLogLog. | [`docs/hll.md`](docs/hll.md) |
+| `bf` | Build and query Bloom filters for approximate membership tests. | [`docs/bf.md`](docs/bf.md) |
+| `card` | Profile approximate cardinality for CSV, JSON Lines, and delimited fields. | [`docs/card.md`](docs/card.md) |
+| `heavy` | Find frequent values in large streams with bounded memory or exact counting. | [`docs/heavy.md`](docs/heavy.md) |
+| `sample` | Sample streams randomly, deterministically, or by reservoir count. | [`docs/sample.md`](docs/sample.md) |
 
-## Quick Usage
+## Quick Examples
 
-`hello` is the simplest tool in the repo:
+Preview a Kafka offset reset:
 
 ```sh
-hello
-hello --version
+ksetoff -F kafka.conf -group my-group -topic events -offset latest -dry-run
 ```
 
-For everything else, use the dedicated tool docs:
+Inspect a RocksDB key:
 
-- [`docs/ksetoff.md`](docs/ksetoff.md)
-- [`docs/rdbsh.md`](docs/rdbsh.md)
-- [`docs/hll.md`](docs/hll.md)
-- [`docs/bf.md`](docs/bf.md)
-- [`docs/card.md`](docs/card.md)
-- [`docs/heavy.md`](docs/heavy.md)
-- [`docs/sample.md`](docs/sample.md)
+```sh
+rdbsh --db /tmp/store --exec "get 0x00000001"
+```
+
+Estimate unique users:
+
+```sh
+jq -r .user_id events.jsonl | hll count
+```
+
+Build and query a Bloom filter:
+
+```sh
+cat known-users.txt | bf build --expected-items 1000000 --false-positive-rate 0.001 > users.bf
+cat candidates.txt | bf test users.bf
+```
+
+Profile JSON field cardinality:
+
+```sh
+card --json .user_id .tenant_id .event_type events.jsonl
+```
+
+Find frequent API paths:
+
+```sh
+awk '{print $7}' access.log | heavy --top 20
+```
+
+Take a stable sample:
+
+```sh
+sample --rate 0.01 --stable events.jsonl
+```
 
 ## Behavior At A Glance
 
+- `--version` prints the binary name and build version.
 - Usage errors exit with status `2`.
 - Runtime errors exit with status `1`.
-- `--version` prints the binary name and build version.
 - `ksetoff -dry-run` prints the offset plan and does not commit offsets.
 - `rdbsh` opens databases read-only unless `--writable` is set.
 - `rdbsh export <file>` refuses to overwrite an existing file unless `--force` is set.
-- Probabilistic tools read from stdin by default and keep diagnostics on stderr.
+- Probabilistic stream tools read from stdin by default and keep diagnostics on stderr.
 - `hll` and `bf` state files are binary, versioned, and checked before use.
 
-## Repository Layout
+Shared behavior for `hll`, `bf`, `card`, `heavy`, and `sample` is documented in [`docs/probabilistic-tools.md`](docs/probabilistic-tools.md).
 
-```text
-.
-├── cmd/
-│   ├── bf/
-│   │   └── main.go
-│   ├── card/
-│   │   └── main.go
-│   ├── heavy/
-│   │   └── main.go
-│   ├── hello/
-│   │   └── main.go
-│   ├── hll/
-│   │   └── main.go
-│   ├── ksetoff/
-│   │   └── main.go
-│   ├── rdbsh/
-│   │   └── main.go
-│   └── sample/
-│       └── main.go
-├── docs/
-│   ├── bf.md
-│   ├── card.md
-│   ├── heavy.md
-│   ├── hll.md
-│   ├── ksetoff.md
-│   ├── rdbsh.md
-│   └── sample.md
-├── internal/
-│   ├── buildinfo/
-│   ├── bf/
-│   ├── card/
-│   ├── heavy/
-│   ├── hello/
-│   ├── hll/
-│   ├── ksetoff/
-│   ├── prob/
-│   └── rdbsh/
-│       └── rocksdb/
-├── scripts/
-│   └── install.sh
-├── .github/workflows/
-├── Makefile
-└── go.mod
-```
-
-## For Contributors
-
-Prerequisites:
-
-- Go 1.26.4 or newer
-- RocksDB development headers and libraries when building `rdbsh` from source
-- macOS or Linux for the installer script
-
-Source build notes for `rdbsh`:
-
-- On macOS, `brew install rocksdb`
-- On Ubuntu or Debian, `sudo apt-get install librocksdb-dev`
-- The `Makefile` auto-detects RocksDB via `pkg-config` when available and falls back to common Homebrew paths
+## From Source
 
 Build all CLIs into `./bin`:
 
@@ -155,24 +119,7 @@ Build all CLIs into `./bin`:
 make build
 ```
 
-Run tests:
-
-```sh
-make test
-```
-
-`make test` runs `go test ./...`, so it needs RocksDB headers because `rdbsh` uses CGo.
-If RocksDB is not installed, run the pure-Go packages while working on unrelated changes:
-
-```sh
-go test ./internal/hello ./internal/ksetoff ./cmd/hello ./cmd/ksetoff
-go test ./internal/prob ./internal/hll ./internal/bf ./internal/card ./internal/heavy ./internal/sample ./cmd/hll ./cmd/bf ./cmd/card ./cmd/heavy ./cmd/sample
-```
-
-For a full test run without installing RocksDB on the host, use Docker if a Docker runtime is available.
-See [`AGENTS.md`](AGENTS.md) for the low-noise container workflow used in this repo.
-
-Run from source:
+Run a tool from source:
 
 ```sh
 make run-hello
@@ -185,34 +132,6 @@ make run-heavy ARGS='--top 20 values.txt'
 make run-sample ARGS='--rate 0.01 events.jsonl'
 ```
 
-Install from source:
+Contributor setup, package layout, tests, and implementation notes are in [`docs/development.md`](docs/development.md).
 
-```sh
-make install-hello
-make install-ksetoff
-make install-rdbsh
-make install-hll
-make install-bf
-make install-card
-make install-heavy
-make install-sample
-```
-
-GitHub Actions:
-
-- build and test on pushes and pull requests
-- cross-build pure Go binaries for Linux on `amd64` and `arm64`, plus macOS `arm64`
-- build native `rdbsh` binaries for Linux on `amd64` and `arm64`, plus macOS `arm64`
-- publish tarball release assets when a `v*` tag is pushed
-
-## Notes For Agents
-
-Start with [`AGENTS.md`](AGENTS.md). It records the repo map, testing tiers, Docker test workflow, and cleanup commands for temporary Docker artifacts.
-
-To add another CLI later:
-
-1. Create `cmd/<cli-name>/main.go`.
-2. Put tool-specific logic in `internal/<cli-name>/`.
-3. Add build and install shortcuts to `Makefile` if needed.
-4. Update CI and release workflows to package the new CLI.
-5. Add the tool to the table above and add dedicated docs when the tool needs more than a short usage note.
+Agents should start with [`AGENTS.md`](AGENTS.md).

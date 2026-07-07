@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"strings"
 	"testing"
+
+	"github.com/jo-cube/toolbox/internal/prob"
 )
 
 func TestFilterRoundTrip(t *testing.T) {
@@ -71,13 +73,13 @@ func TestReadRejectsZeroBitCount(t *testing.T) {
 		0.01,
 		uint64(0),
 		uint32(1),
-		uint8(len("fnv1a64-avalanche-v1")),
+		uint8(len(prob.HashName)),
 	} {
 		if err := binary.Write(&buf, binary.BigEndian, field); err != nil {
 			t.Fatal(err)
 		}
 	}
-	buf.WriteString("fnv1a64-avalanche-v1")
+	buf.WriteString(prob.HashName)
 	if err := binary.Write(&buf, binary.BigEndian, uint64(0)); err != nil {
 		t.Fatal(err)
 	}

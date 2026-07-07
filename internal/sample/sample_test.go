@@ -7,10 +7,20 @@ import (
 	"testing"
 )
 
+const fourRecords = `a
+b
+c
+d
+`
+
+const twoRecords = `a
+b
+`
+
 func TestStableSampleIsRepeatable(t *testing.T) {
 	t.Parallel()
 
-	path := writeInput(t, "a\nb\nc\nd\n")
+	path := writeInput(t, fourRecords)
 	cfg := Config{Rate: 0.5, Stable: true, Seed: 7}
 
 	var a bytes.Buffer
@@ -29,7 +39,7 @@ func TestStableSampleIsRepeatable(t *testing.T) {
 func TestReservoirCount(t *testing.T) {
 	t.Parallel()
 
-	path := writeInput(t, "a\nb\nc\nd\n")
+	path := writeInput(t, fourRecords)
 	var out bytes.Buffer
 	if err := Run([]string{path}, Config{Count: 2, Seed: 1}, &out); err != nil {
 		t.Fatal(err)
@@ -42,7 +52,7 @@ func TestReservoirCount(t *testing.T) {
 func TestRateZeroIsValidAndEmitsNothing(t *testing.T) {
 	t.Parallel()
 
-	path := writeInput(t, "a\nb\n")
+	path := writeInput(t, twoRecords)
 	var out bytes.Buffer
 	if err := Run([]string{path}, Config{Rate: 0, RateSet: true}, &out); err != nil {
 		t.Fatal(err)

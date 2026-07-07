@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/jo-cube/toolbox/internal/buildinfo"
 	"github.com/jo-cube/toolbox/internal/sample"
@@ -17,7 +18,24 @@ func main() {
 	seed := flag.Int64("seed", 0, "random or stable hash seed")
 
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s (--rate <p> [--stable] | --count <n>) [file...]\n", os.Args[0])
+		name := filepath.Base(os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), `Usage: %s (--rate <p> [--stable] | --count <n>) [file...]
+
+Emit a subset of input records while preserving emitted records exactly.
+Set exactly one of --rate or --count.
+
+Examples:
+  sample --rate 0.01 events.jsonl
+  sample --rate 0.01 --stable events.jsonl
+  sample --count 10000 huge-file.txt
+
+Notes:
+  --rate samples each record independently unless --stable is set.
+  --stable hashes the full record without a trailing newline.
+  --count uses reservoir sampling and writes selected records after reading input.
+
+Options:
+`, name)
 		flag.PrintDefaults()
 	}
 	flag.Parse()

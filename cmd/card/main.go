@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 
@@ -23,7 +24,23 @@ func main() {
 	precision := flag.Uint("precision", uint(hll.DefaultP), "HLL precision, 4..20")
 
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s (--csv --columns a,b | --delimiter ',' --columns 1,2 | --json .path...) [file...]\n", os.Args[0])
+		name := filepath.Base(os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), `Usage: %s (--csv --columns a,b | --delimiter ',' --columns 1,2 | --json .path...) [file...]
+
+Profile approximate cardinality for explicit CSV columns, delimited fields, or JSON Lines paths.
+
+Examples:
+  card --csv --columns user_id,country users.csv
+  card --delimiter $'\t' --columns 1,3 data.tsv
+  card --json .user_id .event_type events.jsonl
+
+Notes:
+  CSV mode selects header names.
+  Delimited mode selects 1-based field numbers.
+  JSON paths are simple dot paths; filters and array traversal are not supported.
+
+Options:
+`, name)
 		flag.PrintDefaults()
 	}
 	flag.Parse()

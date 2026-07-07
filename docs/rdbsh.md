@@ -18,13 +18,13 @@ It opens the database locally; it does not connect to a remote service.
 Install the latest release:
 
 ```sh
-./scripts/install.sh rdbsh
+curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | sh -s -- rdbsh
 ```
 
-Install without cloning the repo:
+Install from a cloned repo:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | sh -s -- rdbsh
+./scripts/install.sh rdbsh
 ```
 
 Check the installed version:
@@ -33,7 +33,13 @@ Check the installed version:
 rdbsh --version
 ```
 
-## Quick Start
+## Synopsis
+
+```sh
+rdbsh --db <path> [options]
+```
+
+## Examples
 
 Open a database interactively:
 
@@ -59,11 +65,31 @@ Enable writes explicitly:
 rdbsh --db /tmp/offsetstorage --writable
 ```
 
-## Command Reference
+Read a single key:
 
 ```sh
-rdbsh --db <path> [options]
+rdbsh --db /tmp/offsetstorage --exec "get 0x00000001"
 ```
+
+List keys with a prefix:
+
+```sh
+rdbsh --db /tmp/offsetstorage --exec "keys 0x00 50"
+```
+
+Export the full database to JSON:
+
+```sh
+rdbsh --db /tmp/offsetstorage --exec "export /tmp/dump.json json"
+```
+
+Pipe filtered JSON to another command:
+
+```sh
+rdbsh --db /tmp/offsetstorage --exec "export - json 0x00"
+```
+
+## Options
 
 Required flags:
 
@@ -77,7 +103,7 @@ Optional flags:
 - `--force`: allow `export <file>` to overwrite an existing file
 - `--version`: print version information
 
-Shell commands:
+## Shell Commands
 
 - `get <key>`: read a single key
 - `put <key> <value>`: write a key-value pair; requires `--writable`
@@ -119,44 +145,6 @@ Rules:
 
 Printable bytes are shown as text. Non-printable bytes are shown as lowercase hex. Empty values are shown as `(empty)`.
 
-## Common Workflows
-
-Read a single key:
-
-```sh
-rdbsh --db /tmp/offsetstorage --exec "get 0x00000001"
-```
-
-List keys with a prefix:
-
-```sh
-rdbsh --db /tmp/offsetstorage --exec "keys 0x00 50"
-```
-
-Scan a column family interactively:
-
-```sh
-rdbsh --db /tmp/offsetstorage --cf offsets
-```
-
-Export the full database to JSON:
-
-```sh
-rdbsh --db /tmp/offsetstorage --exec "export /tmp/dump.json json"
-```
-
-Overwrite an existing export file:
-
-```sh
-rdbsh --db /tmp/offsetstorage --force --exec "export /tmp/dump.json json"
-```
-
-Pipe filtered JSON to another command:
-
-```sh
-rdbsh --db /tmp/offsetstorage --exec "export - json 0x00"
-```
-
 ## Export Formats
 
 CSV export writes a header row:
@@ -180,14 +168,24 @@ When the export target is `-`, data is written to stdout and the completion mess
 
 Exporting to a file fails if the file already exists unless `--force` is set.
 
-## Automation Notes
+## Output
 
-- Usage errors exit with status `2`.
-- Runtime errors exit with status `1`.
+Human-readable command output is written to stdout.
+
+Diagnostics and command errors are written to stderr.
+
+Automation behavior:
+
 - `--exec` runs one shell command and exits.
 - In interactive mode, command errors are printed to stderr and the shell keeps running.
 - In `export - ...`, exported data is written to stdout and the completion message is written to stderr.
 - Large `scan`, `count`, and `export` commands can be slow on large databases because they iterate keys.
+
+## Exit Status
+
+- `0`: success
+- `1`: runtime error
+- `2`: invalid command-line usage
 
 ## Column Families
 
@@ -247,3 +245,10 @@ The build cannot find `rocksdb/c.h`:
 
 - Install RocksDB development headers for your platform
 - Confirm the headers and libraries are visible via `pkg-config` or your system include paths
+
+## Contributor Notes
+
+- CLI flags and process exit behavior live in `cmd/rdbsh/main.go`.
+- Shell commands, parsing, formatting, iteration, and export behavior live in `internal/rdbsh`.
+- The CGo surface is intentionally narrow and lives in `internal/rdbsh/rocksdb`.
+- Keep read-only mode as the default. Writes should remain explicit through `--writable`.
