@@ -73,6 +73,14 @@ func TestMergeRejectsDifferentPrecision(t *testing.T) {
 	}
 }
 
+func TestPrecisionRejectsOverflowBeforeUint8Cast(t *testing.T) {
+	t.Parallel()
+
+	if _, err := Precision(260); err == nil || !strings.Contains(err.Error(), "precision must be between") {
+		t.Fatalf("Precision(260) error = %v, want out of range", err)
+	}
+}
+
 func TestReadRejectsBadMagic(t *testing.T) {
 	t.Parallel()
 

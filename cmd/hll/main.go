@@ -43,7 +43,8 @@ func main() {
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "hll: %v\n", err)
-		if strings.HasPrefix(err.Error(), "usage:") {
+		if strings.HasPrefix(err.Error(), "usage:") ||
+			strings.Contains(err.Error(), "precision must be between") {
 			os.Exit(2)
 		}
 		os.Exit(1)
@@ -94,7 +95,11 @@ Options:
 		return err
 	}
 
-	s, err := hll.New(uint8(*precision))
+	p, err := hll.Precision(*precision)
+	if err != nil {
+		return err
+	}
+	s, err := hll.New(p)
 	if err != nil {
 		return err
 	}
@@ -126,7 +131,11 @@ Options:
 		return err
 	}
 
-	s, err := hll.New(uint8(*precision))
+	p, err := hll.Precision(*precision)
+	if err != nil {
+		return err
+	}
+	s, err := hll.New(p)
 	if err != nil {
 		return err
 	}

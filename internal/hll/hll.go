@@ -41,6 +41,13 @@ func New(precision uint8) (*Sketch, error) {
 	}, nil
 }
 
+func Precision(value uint) (uint8, error) {
+	if value < 4 || value > 20 {
+		return 0, fmt.Errorf("precision must be between 4 and 20")
+	}
+	return uint8(value), nil
+}
+
 func (s *Sketch) Add(item []byte) {
 	x := prob.Hash64(item, 0)
 	idx := x >> (64 - s.Precision)
