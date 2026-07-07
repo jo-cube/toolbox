@@ -29,7 +29,7 @@ func formatBytes(data []byte) string {
 	if isPrintable(data) {
 		return string(data)
 	}
-	return fmt.Sprintf("%x", data)
+	return fmt.Sprintf("0x%x", data)
 }
 
 func parseInput(value string) ([]byte, error) {
