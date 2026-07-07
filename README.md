@@ -12,6 +12,8 @@ Install the latest release of a tool:
 curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | sh -s -- <tool>
 ```
 
+The installer verifies the downloaded release archive against the matching SHA256 checksum asset.
+
 Valid tool names: `hello`, `ksetoff`, `rdbsh`, `hll`, `bf`, `card`, `heavy`, `sample`.
 
 For example:

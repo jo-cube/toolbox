@@ -99,12 +99,15 @@ jobs:
           go build -ldflags "-s -w -X github.com/jo-cube/toolbox/internal/buildinfo.version=${VERSION}" -o "dist/${CLI}" ./cmd/${CLI}
           tar -czf "dist/${CLI}_${GOOS}_${GOARCH}.tar.gz" -C dist ${CLI}
           rm dist/${CLI}
+          (cd dist && sha256sum "${CLI}_${GOOS}_${GOARCH}.tar.gz" > "${CLI}_${GOOS}_${GOARCH}.tar.gz.sha256")
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: dist/${{ matrix.cli }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz
+          files: |
+            dist/${{ matrix.cli }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz
+            dist/${{ matrix.cli }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz.sha256
 
   rdbsh-release:
     strategy:
@@ -150,9 +153,16 @@ jobs:
           go build -ldflags "-s -w -X github.com/jo-cube/toolbox/internal/buildinfo.version=${VERSION}" -o dist/rdbsh ./cmd/rdbsh
           tar -czf "dist/rdbsh_${GOOS}_${GOARCH}.tar.gz" -C dist rdbsh
           rm dist/rdbsh
+          if command -v sha256sum >/dev/null 2>&1; then
+            (cd dist && sha256sum "rdbsh_${GOOS}_${GOARCH}.tar.gz" > "rdbsh_${GOOS}_${GOARCH}.tar.gz.sha256")
+          else
+            (cd dist && shasum -a 256 "rdbsh_${GOOS}_${GOARCH}.tar.gz" > "rdbsh_${GOOS}_${GOARCH}.tar.gz.sha256")
+          fi
 
       - name: Upload rdbsh release asset
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: dist/rdbsh_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz
+          files: |
+            dist/rdbsh_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz
+            dist/rdbsh_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz.sha256
