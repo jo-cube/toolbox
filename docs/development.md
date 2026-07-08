@@ -39,6 +39,7 @@ internal/heavy/       heavy-hitter detection
 internal/sample/      stream sampling
 docs/                 user and contributor documentation
 scripts/install.sh    release installer
+scripts/release-test/ Docker-based release validation for published binaries
 ```
 
 The usual split is:
@@ -77,6 +78,7 @@ Run cheap checks first:
 ```sh
 gofmt -l .
 sh -n scripts/install.sh
+for f in $(find scripts/release-test -type f -name '*.sh' | sort); do sh -n "$f"; done
 go test ./internal/hello ./internal/ksetoff ./cmd/hello ./cmd/ksetoff
 go test ./internal/prob ./internal/hll ./internal/bf ./internal/card ./internal/heavy ./internal/sample ./cmd/hll ./cmd/bf ./cmd/card ./cmd/heavy ./cmd/sample
 ```
@@ -128,3 +130,15 @@ GitHub Actions:
 
 Release assets are downloaded by `scripts/install.sh`.
 The installer verifies SHA256 checksums before extracting archives.
+
+After publishing a release, validate the published binaries in Docker without
+installing them on the host:
+
+```sh
+VERSION=v0.3.0 sh scripts/release-test/smoke.sh
+VERSION=v0.3.0 sh scripts/release-test/ksetoff-kafka.sh
+VERSION=v0.3.0 sh scripts/release-test/perf.sh
+```
+
+The release-test workflow and cleanup expectations are documented in
+[`release-testing.md`](release-testing.md).

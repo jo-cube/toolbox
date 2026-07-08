@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/instal
 Install a specific release version:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | VERSION=v0.1.0 sh -s -- hll
+curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | VERSION=v0.3.0 sh -s -- hll
 ```
 
 Release binaries are published for:
@@ -135,5 +135,6 @@ make run-sample ARGS='--rate 0.01 events.jsonl'
 ```
 
 Contributor setup, package layout, tests, and implementation notes are in [`docs/development.md`](docs/development.md).
+Published release validation is documented in [`docs/release-testing.md`](docs/release-testing.md).
 
 Agents should start with [`AGENTS.md`](AGENTS.md).

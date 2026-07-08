@@ -15,6 +15,7 @@ Keep changes small, verify the behavior you touched, and report any local setup 
 - `internal/hll`, `internal/bf`, `internal/card`, `internal/heavy`, `internal/sample`: probabilistic stream tool logic.
 - `docs/`: user docs, contributor notes, and shared tool behavior.
 - `scripts/install.sh`: release installer.
+- `scripts/release-test/`: Docker-based release validation scripts for published binaries.
 - `.github/workflows/`: CI and release packaging.
 
 ## Working Style
@@ -33,6 +34,7 @@ Run cheap checks first:
 ```sh
 gofmt -l .
 sh -n scripts/install.sh
+for f in $(find scripts/release-test -type f -name '*.sh' | sort); do sh -n "$f"; done
 go test ./internal/hello ./internal/ksetoff ./cmd/hello ./cmd/ksetoff
 go test ./internal/prob ./internal/hll ./internal/bf ./internal/card ./internal/heavy ./internal/sample ./cmd/hll ./cmd/bf ./cmd/card ./cmd/heavy ./cmd/sample
 ```
@@ -108,3 +110,5 @@ If you create additional containers or temporary images, list them and include m
 
 Release assets are built by GitHub Actions and downloaded by `scripts/install.sh`.
 The installer verifies release archives against SHA256 checksum assets.
+Use `docs/release-testing.md` and `scripts/release-test/` to validate published
+release binaries in Docker without installing them on the host.
