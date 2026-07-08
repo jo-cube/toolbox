@@ -82,13 +82,13 @@ Options:
 	spec, err := ksetoff.ParseOffsetSpec(*offsetRaw)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ksetoff: %v\n", err)
-		os.Exit(1)
+		os.Exit(2)
 	}
 
 	requestedPartitions, err := ksetoff.ParsePartitions(*partitionsRaw)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ksetoff: %v\n", err)
-		os.Exit(1)
+		os.Exit(2)
 	}
 
 	kafkaConfig, err := ksetoff.ParseConfigFile(*configFile)
