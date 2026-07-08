@@ -43,7 +43,7 @@ hello
 Output:
 
 ```text
-Hello from toolbox.
+Hello, world!
 ```
 
 Print version information:
