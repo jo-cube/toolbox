@@ -26,7 +26,7 @@ func Validate(cfg Config) error {
 	if hasRate == hasCount {
 		return fmt.Errorf("set exactly one of --rate or --count")
 	}
-	if cfg.Rate < 0 || cfg.Rate > 1 {
+	if math.IsNaN(cfg.Rate) || math.IsInf(cfg.Rate, 0) || cfg.Rate < 0 || cfg.Rate > 1 {
 		return fmt.Errorf("rate must be between 0 and 1")
 	}
 	if cfg.Stable && hasCount {

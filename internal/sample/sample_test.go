@@ -2,6 +2,7 @@ package sample
 
 import (
 	"bytes"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -67,6 +68,14 @@ func TestValidateRejectsAmbiguousMode(t *testing.T) {
 
 	if err := Validate(Config{Rate: 0.1, Count: 10}); err == nil {
 		t.Fatal("Validate() accepted rate and count together")
+	}
+}
+
+func TestValidateRejectsNaNRate(t *testing.T) {
+	t.Parallel()
+
+	if err := Validate(Config{Rate: math.NaN(), RateSet: true}); err == nil {
+		t.Fatal("Validate() accepted NaN rate")
 	}
 }
 
