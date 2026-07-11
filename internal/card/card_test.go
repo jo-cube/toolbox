@@ -65,6 +65,19 @@ func TestJSONProfileHandlesLongLines(t *testing.T) {
 	}
 }
 
+func TestJSONProfilePreservesNumberEncoding(t *testing.T) {
+	t.Parallel()
+
+	path := writeInput(t, "{\"id\":9007199254740992}\n{\"id\":9007199254740993}\n{\"id\":1}\n{\"id\":1.0}\n")
+	got, err := Run([]string{path}, Config{Mode: "json", JSONPaths: []string{".id"}, Precision: 8})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].ApproxUnique != 4 {
+		t.Fatalf("approx_unique = %d, want 4 distinct JSON encodings", got[0].ApproxUnique)
+	}
+}
+
 func TestDelimitedColumnsAreOneBased(t *testing.T) {
 	t.Parallel()
 
