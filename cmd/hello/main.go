@@ -11,7 +11,9 @@ import (
 )
 
 func main() {
-	showVersion := flag.Bool("version", false, "print version information")
+	var showVersion bool
+	flag.BoolVar(&showVersion, "version", false, "print version information")
+	flag.BoolVar(&showVersion, "V", false, "print version information")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), `Usage: %s [--version]
 
@@ -27,7 +29,11 @@ Options:
 	}
 	flag.Parse()
 
-	if *showVersion {
+	if showVersion {
+		if len(os.Args) != 2 || (os.Args[1] != "--version" && os.Args[1] != "-V") {
+			flag.Usage()
+			os.Exit(2)
+		}
 		fmt.Fprintf(os.Stdout, "hello %s\n", buildinfo.Version())
 		return
 	}

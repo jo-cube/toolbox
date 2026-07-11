@@ -62,6 +62,9 @@ Commands:
   inspect    Print .bf metadata.
   union      Combine compatible .bf filters and write a filter to stdout.
 
+Global options:
+  -V, --version  Print version information.
+
 Examples:
   cat known.txt | bf build --expected-items 1000000 --false-positive-rate 0.001 > known.bf
   cat candidates.txt | bf test known.bf

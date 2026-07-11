@@ -11,7 +11,9 @@ import (
 )
 
 func main() {
-	showVersion := flag.Bool("version", false, "print version information")
+	var showVersion bool
+	flag.BoolVar(&showVersion, "version", false, "print version information")
+	flag.BoolVar(&showVersion, "V", false, "print version information")
 	rate := flag.Float64("rate", 0, "sample probability, 0..1")
 	count := flag.Int("count", 0, "reservoir sample size")
 	stable := flag.Bool("stable", false, "use deterministic hash sampling with --rate")
@@ -40,7 +42,11 @@ Options:
 	}
 	flag.Parse()
 
-	if *showVersion {
+	if showVersion {
+		if len(os.Args) != 2 || (os.Args[1] != "--version" && os.Args[1] != "-V") {
+			flag.Usage()
+			os.Exit(2)
+		}
 		fmt.Fprintf(os.Stdout, "sample %s\n", buildinfo.Version())
 		return
 	}
