@@ -21,6 +21,8 @@ Install the latest release:
 curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/install.sh | sh -s -- rdbsh
 ```
 
+The released binary requires a compatible RocksDB runtime library. The installer checks this before installing and prints platform-specific setup guidance when the library is unavailable.
+
 Install from a cloned repo:
 
 ```sh
@@ -101,7 +103,7 @@ Optional flags:
 - `--cf`: column family to operate on; defaults to the default column family
 - `--exec`: run a single shell command and exit
 - `--force`: allow `export <file>` to overwrite an existing file
-- `--version`: print version information
+- `--version`, `-V`: print version information
 
 ## Shell Commands
 
@@ -167,6 +169,8 @@ JSON export writes an array of objects in this shape:
 When the export target is `-`, data is written to stdout and the completion message is written to stderr.
 
 Exporting to a file fails if the file already exists unless `--force` is set.
+
+Exported keys and values are round-trippable through the shell input format. Ordinary printable text stays readable. Empty, binary, and text beginning with `0x` or `0X` is emitted as unambiguous lowercase hex; for example, an empty value is `0x`, a zero byte is `0x00`, and the literal text `0x00` is `0x30783030`.
 
 ## Output
 
@@ -235,6 +239,12 @@ The database does not open:
 
 - Confirm `--db` points to a RocksDB directory, not a file
 - Check that the process has permission to read the directory
+
+The installer reports that the released binary is missing a RocksDB library:
+
+- On macOS, run `brew install rocksdb`
+- On Ubuntu or Debian, run `sudo apt-get install librocksdb-dev`
+- On other Linux distributions, install a RocksDB runtime compatible with the release binary
 
 The column family is missing:
 

@@ -39,6 +39,7 @@ internal/heavy/       heavy-hitter detection
 internal/sample/      stream sampling
 docs/                 user and contributor documentation
 scripts/install.sh    release installer
+scripts/smoke-local.sh local binary version/help/exit checks
 scripts/release-test/ Docker-based release validation for published binaries
 ```
 
@@ -77,7 +78,7 @@ Run cheap checks first:
 
 ```sh
 gofmt -l .
-sh -n scripts/install.sh
+sh -n scripts/install.sh scripts/smoke-local.sh
 for f in $(find scripts/release-test -type f -name '*.sh' | sort); do sh -n "$f"; done
 go test ./internal/hello ./internal/ksetoff ./cmd/hello ./cmd/ksetoff
 go test ./internal/prob ./internal/hll ./internal/bf ./internal/card ./internal/heavy ./internal/sample ./cmd/hll ./cmd/bf ./cmd/card ./cmd/heavy ./cmd/sample
@@ -90,6 +91,14 @@ go test ./...
 ```
 
 `go test ./...` requires RocksDB development headers because `rdbsh` uses CGo.
+
+After building, run the small local CLI smoke suite:
+
+```sh
+TOOLBOX_BIN="$PWD/bin" sh scripts/smoke-local.sh
+```
+
+It checks version aliases, help output, representative exit statuses, and the `hello` output for the locally built binaries.
 
 ## Implementation Notes
 
@@ -130,6 +139,7 @@ GitHub Actions:
 
 Release assets are downloaded by `scripts/install.sh`.
 The installer verifies SHA256 checksums before extracting archives.
+It also runs the extracted `rdbsh --version` before installation so missing or incompatible RocksDB runtime libraries fail with setup guidance.
 
 After publishing a release, validate the published binaries in Docker without
 installing them on the host:

@@ -104,7 +104,7 @@ It does not:
 - `--count N`: keep up to `N` records using reservoir sampling
 - `--stable`: use deterministic hash sampling with `--rate`
 - `--seed N`: seed random modes or stable hashing
-- `--version`: print version information
+- `--version`, `-V`: print version information
 
 Invalid combinations fail:
 

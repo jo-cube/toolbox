@@ -42,6 +42,8 @@ Release binaries are published for:
 - `linux/arm64`
 - `darwin/arm64`
 
+`rdbsh` additionally requires a compatible RocksDB runtime library. Its installer checks the runtime before installing and prints setup guidance when needed.
+
 ## Tools
 
 | Tool | What it does | Docs |
@@ -102,7 +104,7 @@ sample --rate 0.01 --stable events.jsonl
 
 ## Behavior At A Glance
 
-- `--version` prints the binary name and build version.
+- `--version` and `-V` print the binary name and build version.
 - Usage errors exit with status `2`.
 - Runtime errors exit with status `1`.
 - `ksetoff -dry-run` prints the offset plan and does not commit offsets.

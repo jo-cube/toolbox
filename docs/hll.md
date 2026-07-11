@@ -122,6 +122,7 @@ Input options for `count` and `build`:
 Output options:
 
 - `--json`: available on `count`, `estimate`, and `inspect`
+- `--version`, `-V`: print version information
 
 ## Input Model
 

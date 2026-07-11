@@ -54,7 +54,7 @@ hello --version
 
 ## Options
 
-- `--version`: print version information
+- `--version`, `-V`: print version information
 
 ## Output
 
