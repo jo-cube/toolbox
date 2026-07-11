@@ -15,7 +15,9 @@ import (
 )
 
 func main() {
-	showVersion := flag.Bool("version", false, "print version information")
+	var showVersion bool
+	flag.BoolVar(&showVersion, "version", false, "print version information")
+	flag.BoolVar(&showVersion, "V", false, "print version information")
 	csvMode := flag.Bool("csv", false, "read CSV with a header row")
 	delimiter := flag.String("delimiter", "", "read delimited text with this delimiter")
 	columnsRaw := flag.String("columns", "", "comma-separated CSV columns or 1-based delimited fields")
@@ -45,7 +47,11 @@ Options:
 	}
 	flag.Parse()
 
-	if *showVersion {
+	if showVersion {
+		if len(os.Args) != 2 || (os.Args[1] != "--version" && os.Args[1] != "-V") {
+			flag.Usage()
+			os.Exit(2)
+		}
 		fmt.Fprintf(os.Stdout, "card %s\n", buildinfo.Version())
 		return
 	}

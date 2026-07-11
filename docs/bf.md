@@ -118,6 +118,7 @@ Command options:
 - `--false-positive-rate P`: required by `build`
 - `--invert`: emit definitely absent values in `test`
 - `--json`: write JSON output from `inspect`
+- `--version`, `-V`: print version information
 
 ## Input Model
 
@@ -135,6 +136,8 @@ Defaults:
 Bloom filters trade memory for false-positive probability.
 
 If you insert more than `--expected-items`, the actual false-positive rate increases. If you need a lower false-positive rate, rebuild the filter with a lower `--false-positive-rate` value or a higher expected item count.
+
+`bf` limits a filter bitset to 512 MiB and at most 64 hashes per item. Sizing requests and state files outside those limits fail before allocation.
 
 ## State Files
 

@@ -32,33 +32,29 @@ func (s *Shell) cmdExport(args []string) error {
 		prefix = decoded
 	}
 
-	writer := io.Writer(s.out)
-	closer := io.NopCloser(strings.NewReader(""))
-	closeNeeded := false
-	if filePath != "-" {
-		file, err := openExportFile(filePath, s.config.Force)
+	if filePath == "-" {
+		count, err := s.export(s.out, format, prefix)
 		if err != nil {
 			return err
 		}
-		writer = file
-		closer = file
-		closeNeeded = true
-	}
-	if closeNeeded {
-		defer closer.Close()
-	}
-
-	count, err := s.export(writer, format, prefix)
-	if err != nil {
+		_, err = fmt.Fprintf(s.errOut, "exported %d entries to stdout (%s)\n", count, format)
 		return err
 	}
 
-	if filePath == "-" {
-		fmt.Fprintf(s.errOut, "exported %d entries to stdout (%s)\n", count, format)
-		return nil
+	file, err := openExportFile(filePath, s.config.Force)
+	if err != nil {
+		return err
 	}
-	fmt.Fprintf(s.out, "exported %d entries to %s (%s)\n", count, filePath, format)
-	return nil
+	count, exportErr := s.export(file, format, prefix)
+	closeErr := file.Close()
+	if exportErr != nil {
+		return exportErr
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close export file: %w", closeErr)
+	}
+	_, err = fmt.Fprintf(s.out, "exported %d entries to %s (%s)\n", count, filePath, format)
+	return err
 }
 
 func openExportFile(filePath string, force bool) (*os.File, error) {
@@ -87,7 +83,7 @@ func (s *Shell) exportCSV(writer io.Writer, prefix []byte) (int, error) {
 	}
 
 	result, err := s.iterate(prefix, 0, func(key, value []byte) error {
-		return csvWriter.Write([]string{formatBytes(key), formatBytes(value)})
+		return csvWriter.Write([]string{formatExportBytes(key), formatExportBytes(value)})
 	})
 	if err != nil {
 		return 0, err
@@ -110,8 +106,8 @@ func (s *Shell) exportJSON(writer io.Writer, prefix []byte) (int, error) {
 			Key   string `json:"key"`
 			Value string `json:"value"`
 		}{
-			Key:   formatBytes(key),
-			Value: formatBytes(value),
+			Key:   formatExportBytes(key),
+			Value: formatExportBytes(value),
 		})
 		if err != nil {
 			return err

@@ -63,6 +63,9 @@ Commands:
   merge       Merge compatible .hll sketches and write a sketch to stdout.
   inspect     Print .hll metadata and estimate.
 
+Global options:
+  -V, --version  Print version information.
+
 Examples:
   jq -r .user_id events.jsonl | hll count
   jq -r .user_id events.jsonl | hll build > users.hll

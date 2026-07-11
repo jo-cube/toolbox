@@ -2,6 +2,8 @@ package hll
 
 import (
 	"bytes"
+	"encoding/binary"
+	"math"
 	"strconv"
 	"strings"
 	"testing"
@@ -87,5 +89,61 @@ func TestReadRejectsBadMagic(t *testing.T) {
 	_, err := Read(strings.NewReader("NOPE"))
 	if err == nil || !strings.Contains(err.Error(), "invalid HLL file magic") {
 		t.Fatalf("Read() error = %v, want invalid magic", err)
+	}
+}
+
+func TestEstimateAcrossCardinalityAndPrecision(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		precision uint8
+		count     int
+	}{
+		{precision: 4, count: 10_000},
+		{precision: DefaultP, count: 100},
+		{precision: DefaultP, count: 10_000},
+		{precision: DefaultP, count: 100_000},
+		{precision: 20, count: 100_000},
+	}
+	for _, tt := range tests {
+		current := tt
+		t.Run("p="+strconv.Itoa(int(current.precision))+"/n="+strconv.Itoa(current.count), func(t *testing.T) {
+			t.Parallel()
+			s, err := New(current.precision)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := range current.count {
+				s.Add([]byte(strconv.Itoa(i)))
+			}
+			got := s.Estimate()
+			tolerance := uint64(math.Ceil(float64(current.count) * s.RelativeError() * 5))
+			if tolerance < 3 {
+				tolerance = 3
+			}
+			delta := math.Abs(float64(got) - float64(current.count))
+			if delta > float64(tolerance) {
+				t.Fatalf("Estimate() = %d, want %d ± %d", got, current.count, tolerance)
+			}
+		})
+	}
+}
+
+func TestReadRejectsImpossibleRegister(t *testing.T) {
+	t.Parallel()
+
+	s, err := New(4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := Write(&buf, s); err != nil {
+		t.Fatal(err)
+	}
+	data := buf.Bytes()
+	headerSize := 4 + 1 + 1 + 1 + len("fnv1a64-avalanche-v1") + binary.Size(uint32(0))
+	data[headerSize] = 62
+	if _, err := Read(bytes.NewReader(data)); err == nil || !strings.Contains(err.Error(), "invalid register") {
+		t.Fatalf("Read() error = %v, want invalid register", err)
 	}
 }

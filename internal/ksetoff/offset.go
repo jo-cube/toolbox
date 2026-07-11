@@ -2,6 +2,7 @@ package ksetoff
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kadm"
+	"github.com/twmb/franz-go/pkg/kerr"
 )
 
 type OffsetMode int
@@ -185,6 +187,9 @@ func Run(ctx context.Context, admin *kadm.Client, params RunParams) error {
 		for partition := range currentOffsets {
 			currentOffsets[partition] = "?"
 		}
+		if _, writeErr := fmt.Fprintf(errOut, "warning: could not fetch current offsets: %v\n", err); writeErr != nil {
+			return writeErr
+		}
 	}
 
 	for i := range rows {
@@ -234,24 +239,36 @@ func Run(ctx context.Context, admin *kadm.Client, params RunParams) error {
 
 	committed, err := admin.CommitOffsets(ctx, params.GroupID, offsets)
 	if err != nil {
-		if strings.Contains(err.Error(), "not empty") || strings.Contains(err.Error(), "ILLEGAL_GENERATION") || strings.Contains(err.Error(), "REBALANCE_IN_PROGRESS") {
+		if isActiveGroupError(err) {
 			return fmt.Errorf("consumer group %q has active members. Stop all consumers in the group before resetting offsets", params.GroupID)
 		}
 		return fmt.Errorf("failed to commit offsets: %w", err)
 	}
 
 	var commitErrors []string
+	activeGroup := false
 	committed.Each(func(offset kadm.OffsetResponse) {
 		if offset.Err != nil {
+			activeGroup = activeGroup || isActiveGroupError(offset.Err)
 			commitErrors = append(commitErrors, fmt.Sprintf("partition %d: %v", offset.Partition, offset.Err))
 		}
 	})
+	if activeGroup {
+		return fmt.Errorf("consumer group %q has active members. Stop all consumers in the group before resetting offsets", params.GroupID)
+	}
 	if len(commitErrors) > 0 {
 		return fmt.Errorf("some partitions failed to commit:\n  %s", strings.Join(commitErrors, "\n  "))
 	}
 
 	_, err = fmt.Fprintf(out, "  Successfully committed offsets for %d partition(s).\n\n", len(rows))
 	return err
+}
+
+func isActiveGroupError(err error) bool {
+	return errors.Is(err, kerr.IllegalGeneration) ||
+		errors.Is(err, kerr.RebalanceInProgress) ||
+		errors.Is(err, kerr.UnknownMemberID) ||
+		errors.Is(err, kerr.NonEmptyGroup)
 }
 
 func targetPartitions(totalPartitions int32, requested []int32) ([]int32, error) {

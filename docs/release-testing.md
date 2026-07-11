@@ -38,6 +38,8 @@ This starts an `ubuntu:24.04` container, installs all eight released tools into
 `/tmp/toolbox-bin`, and runs the per-tool scripts in
 `scripts/release-test/smoke/`.
 
+The container installs RocksDB before `rdbsh`, so this suite verifies a compatible runtime rather than the installer's missing-runtime guidance.
+
 It covers:
 
 - install and `--version` for every tool

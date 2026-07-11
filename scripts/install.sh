@@ -155,12 +155,31 @@ if [ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]; then
 	exit 1
 fi
 
-mkdir -p "$INSTALL_DIR"
 if [ "$(tar -tzf "$ARCHIVE_PATH")" != "$CLI_NAME" ]; then
 	printf 'error: release archive must contain only %s\n' "$CLI_NAME" >&2
 	exit 1
 fi
 tar -xzf "$ARCHIVE_PATH" -C "$TMP_DIR"
+
+if [ "$CLI_NAME" = "rdbsh" ]; then
+	RUNTIME_ERROR="${TMP_DIR}/rdbsh-runtime-error"
+	if ! "${TMP_DIR}/rdbsh" --version >/dev/null 2>"$RUNTIME_ERROR"; then
+		printf 'error: rdbsh requires a compatible RocksDB runtime library\n' >&2
+		case "$GOOS" in
+		linux)
+			printf 'On Ubuntu or Debian, install it with: sudo apt-get install librocksdb-dev\n' >&2
+			;;
+		darwin)
+			printf 'On macOS, install it with: brew install rocksdb\n' >&2
+			;;
+		esac
+		printf 'Loader error:\n' >&2
+		cat "$RUNTIME_ERROR" >&2
+		exit 1
+	fi
+fi
+
+mkdir -p "$INSTALL_DIR"
 install -m 0755 "${TMP_DIR}/${CLI_NAME}" "${INSTALL_DIR}/${CLI_NAME}"
 
 printf 'Installed %s to %s\n' "$CLI_NAME" "${INSTALL_DIR}/${CLI_NAME}"

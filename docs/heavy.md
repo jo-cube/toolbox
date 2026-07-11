@@ -94,7 +94,7 @@ The field is named `count_estimate` even in exact mode so scripts can switch mod
 - `--trim`: trim surrounding whitespace
 - `--ignore-empty`: skip empty items
 - `-0`, `--nul`: read NUL-delimited items
-- `--version`: print version information
+- `--version`, `-V`: print version information
 
 `--json` and `--tsv` are mutually exclusive.
 
@@ -122,6 +122,8 @@ Approximate mode can:
 - produce approximate ordering near the cutoff
 
 Increase `--capacity` when ordering quality matters. Use `--exact` when the input is small enough to keep every distinct value in memory.
+
+Updates in approximate mode take logarithmic time in the configured capacity, including when most input values are distinct.
 
 ## Exit Status
 

@@ -175,6 +175,12 @@ func Read(r io.Reader) (*Sketch, error) {
 	if _, err := io.ReadFull(r, s.Registers); err != nil {
 		return nil, fmt.Errorf("read registers: %w", err)
 	}
+	maxRank := uint8(65 - precision)
+	for i, rank := range s.Registers {
+		if rank > maxRank {
+			return nil, fmt.Errorf("invalid register %d value %d for precision %d", i, rank, precision)
+		}
+	}
 	return s, nil
 }
 

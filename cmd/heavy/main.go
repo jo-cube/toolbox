@@ -14,7 +14,9 @@ import (
 )
 
 func main() {
-	showVersion := flag.Bool("version", false, "print version information")
+	var showVersion bool
+	flag.BoolVar(&showVersion, "version", false, "print version information")
+	flag.BoolVar(&showVersion, "V", false, "print version information")
 	top := flag.Int("top", 10, "number of heavy hitters to print")
 	capacity := flag.Int("capacity", 0, "tracked item capacity for approximate mode")
 	exact := flag.Bool("exact", false, "use exact counts with unbounded memory")
@@ -41,7 +43,11 @@ Options:
 	}
 	flag.Parse()
 
-	if *showVersion {
+	if showVersion {
+		if len(os.Args) != 2 || (os.Args[1] != "--version" && os.Args[1] != "-V") {
+			flag.Usage()
+			os.Exit(2)
+		}
 		fmt.Fprintf(os.Stdout, "heavy %s\n", buildinfo.Version())
 		return
 	}

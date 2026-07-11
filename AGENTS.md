@@ -15,6 +15,7 @@ Keep changes small, verify the behavior you touched, and report any local setup 
 - `internal/hll`, `internal/bf`, `internal/card`, `internal/heavy`, `internal/sample`: probabilistic stream tool logic.
 - `docs/`: user docs, contributor notes, and shared tool behavior.
 - `scripts/install.sh`: release installer.
+- `scripts/smoke-local.sh`: quick checks for locally built CLI binaries.
 - `scripts/release-test/`: Docker-based release validation scripts for published binaries.
 - `.github/workflows/`: CI and release packaging.
 
@@ -33,7 +34,7 @@ Run cheap checks first:
 
 ```sh
 gofmt -l .
-sh -n scripts/install.sh
+sh -n scripts/install.sh scripts/smoke-local.sh
 for f in $(find scripts/release-test -type f -name '*.sh' | sort); do sh -n "$f"; done
 go test ./internal/hello ./internal/ksetoff ./cmd/hello ./cmd/ksetoff
 go test ./internal/prob ./internal/hll ./internal/bf ./internal/card ./internal/heavy ./internal/sample ./cmd/hll ./cmd/bf ./cmd/card ./cmd/heavy ./cmd/sample

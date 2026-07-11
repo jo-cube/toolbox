@@ -111,8 +111,8 @@ Optional flags:
 
 - `-partitions`: comma-separated partition numbers; defaults to all partitions
 - `-dry-run`: print the plan without committing offsets
-- `-timeout`: overall operation timeout; defaults to `30s`
-- `--version`: print version information
+- `-timeout`: positive overall operation timeout; defaults to `30s`
+- `--version`, `-V`: print version information
 
 ## Offset Specs
 

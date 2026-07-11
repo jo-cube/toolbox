@@ -10,8 +10,10 @@ import (
 )
 
 const (
-	Magic         = "BLM1"
-	Version uint8 = 1
+	Magic                 = "BLM1"
+	Version        uint8  = 1
+	maxFilterBytes        = 512 << 20
+	maxHashCount   uint32 = 64
 )
 
 type Filter struct {
@@ -35,17 +37,9 @@ type Metadata struct {
 }
 
 func New(expected uint64, rate float64) (*Filter, error) {
-	if expected == 0 {
-		return nil, fmt.Errorf("expected-items must be greater than zero")
-	}
-	if rate <= 0 || rate >= 1 {
-		return nil, fmt.Errorf("false-positive-rate must be greater than 0 and less than 1")
-	}
-
-	m := uint64(math.Ceil(-float64(expected) * math.Log(rate) / (math.Ln2 * math.Ln2)))
-	k := uint32(math.Round(float64(m) / float64(expected) * math.Ln2))
-	if k == 0 {
-		k = 1
+	m, k, byteCount, err := sizing(expected, rate)
+	if err != nil {
+		return nil, err
 	}
 
 	return &Filter{
@@ -53,8 +47,35 @@ func New(expected uint64, rate float64) (*Filter, error) {
 		FalsePositiveRate: rate,
 		BitCount:          m,
 		HashCount:         k,
-		Bits:              make([]byte, (m+7)/8),
+		Bits:              make([]byte, byteCount),
 	}, nil
+}
+
+func sizing(expected uint64, rate float64) (uint64, uint32, uint64, error) {
+	if expected == 0 {
+		return 0, 0, 0, fmt.Errorf("expected-items must be greater than zero")
+	}
+	if math.IsNaN(rate) || math.IsInf(rate, 0) || rate <= 0 || rate >= 1 {
+		return 0, 0, 0, fmt.Errorf("false-positive-rate must be greater than 0 and less than 1")
+	}
+
+	bitCountFloat := math.Ceil(-float64(expected) * math.Log(rate) / (math.Ln2 * math.Ln2))
+	if math.IsInf(bitCountFloat, 0) || bitCountFloat > maxFilterBytes*8 {
+		return 0, 0, 0, fmt.Errorf("expected-items and false-positive-rate require more than the %d MiB allocation limit", maxFilterBytes>>20)
+	}
+	bitCount := uint64(bitCountFloat)
+	hashCount := uint32(math.Round(float64(bitCount) / float64(expected) * math.Ln2))
+	if hashCount == 0 {
+		hashCount = 1
+	}
+	if hashCount > maxHashCount {
+		return 0, 0, 0, fmt.Errorf("false-positive-rate requires %d hashes; maximum supported is %d", hashCount, maxHashCount)
+	}
+	byteCount := bitCount / 8
+	if bitCount%8 != 0 {
+		byteCount++
+	}
+	return bitCount, hashCount, byteCount, nil
 }
 
 func (f *Filter) Add(item []byte) {
@@ -183,31 +204,31 @@ func Read(r io.Reader) (*Filter, error) {
 	if hashName != prob.HashName {
 		return nil, fmt.Errorf("unsupported hash %q", hashName)
 	}
-	if f.BitCount == 0 {
-		return nil, fmt.Errorf("invalid bit count 0")
-	}
-	if f.HashCount == 0 {
-		return nil, fmt.Errorf("invalid hash count 0")
-	}
 	var byteCount uint64
 	if err := binary.Read(r, binary.BigEndian, &byteCount); err != nil {
 		return nil, err
 	}
-	if byteCount != (f.BitCount+7)/8 {
-		return nil, fmt.Errorf("invalid bitset size %d for %d bits", byteCount, f.BitCount)
+	if f.ExpectedItems == 0 {
+		return nil, fmt.Errorf("invalid expected item count 0")
 	}
-	if byteCount > uint64(maxInt()) {
-		return nil, fmt.Errorf("bitset too large: %d bytes", byteCount)
+	if math.IsNaN(f.FalsePositiveRate) || math.IsInf(f.FalsePositiveRate, 0) || f.FalsePositiveRate <= 0 || f.FalsePositiveRate >= 1 {
+		return nil, fmt.Errorf("invalid false-positive rate %g", f.FalsePositiveRate)
+	}
+	if f.BitCount == 0 || f.BitCount > maxFilterBytes*8 {
+		return nil, fmt.Errorf("invalid bit count %d", f.BitCount)
+	}
+	if f.HashCount == 0 || f.HashCount > maxHashCount {
+		return nil, fmt.Errorf("invalid hash count %d", f.HashCount)
+	}
+	wantBytes := (f.BitCount + 7) / 8
+	if byteCount != wantBytes {
+		return nil, fmt.Errorf("invalid bitset size %d for %d bits", byteCount, f.BitCount)
 	}
 	f.Bits = make([]byte, byteCount)
 	if _, err := io.ReadFull(r, f.Bits); err != nil {
 		return nil, fmt.Errorf("read bitset: %w", err)
 	}
 	return f, nil
-}
-
-func maxInt() int {
-	return int(^uint(0) >> 1)
 }
 
 func writeString(w io.Writer, value string) error {

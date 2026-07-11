@@ -12,7 +12,9 @@ import (
 )
 
 func main() {
-	showVersion := flag.Bool("version", false, "print version information")
+	var showVersion bool
+	flag.BoolVar(&showVersion, "version", false, "print version information")
+	flag.BoolVar(&showVersion, "V", false, "print version information")
 	dbPath := flag.String("db", "", "path to RocksDB directory [required]")
 	writable := flag.Bool("writable", false, "open the database in read-write mode")
 	columnFamily := flag.String("cf", "", "column family to operate on (default: default)")
@@ -45,7 +47,11 @@ Options:
 
 	flag.Parse()
 
-	if *showVersion {
+	if showVersion {
+		if len(os.Args) != 2 || (os.Args[1] != "--version" && os.Args[1] != "-V") {
+			flag.Usage()
+			os.Exit(2)
+		}
 		fmt.Fprintf(os.Stdout, "rdbsh %s\n", buildinfo.Version())
 		return
 	}

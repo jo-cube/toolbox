@@ -110,7 +110,7 @@ JSON omits zero-valued `nulls`, `missing`, and `empty` fields.
 - `--columns LIST`: comma-separated CSV column names or 1-based delimited fields
 - `--precision N`: HLL precision from `4` to `20`; default is `14`
 - `--output-json`: write JSON output
-- `--version`: print version information
+- `--version`, `-V`: print version information
 
 ## Counting Rules
 
@@ -125,7 +125,7 @@ Separate counters report:
 - `empty`: empty strings
 - `total`: total records observed for that field
 
-For non-string JSON values, `card` hashes the JSON encoding of the value.
+For non-string JSON values, `card` hashes the JSON encoding of the value. JSON numbers retain their input spelling, so `1`, `1.0`, and `1e0` are distinct and large integers keep their full precision.
 
 Malformed CSV or malformed JSON fails the command with a line-aware error where possible.
 

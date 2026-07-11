@@ -137,7 +137,15 @@ func runJSON(paths []string, cfg Config) ([]Profile, error) {
 	}
 	return finish(counters, eachLine(paths, func(line string) error {
 		var obj any
-		if err := json.Unmarshal([]byte(line), &obj); err != nil {
+		decoder := json.NewDecoder(strings.NewReader(line))
+		decoder.UseNumber()
+		if err := decoder.Decode(&obj); err != nil {
+			return err
+		}
+		if err := decoder.Decode(new(any)); err != io.EOF {
+			if err == nil {
+				return fmt.Errorf("multiple JSON values")
+			}
 			return err
 		}
 		for i, path := range segments {

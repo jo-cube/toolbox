@@ -1,8 +1,10 @@
 package heavy
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -49,6 +51,26 @@ func TestApproximateKeepsHeavyItem(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].Item != "x" {
 		t.Fatalf("Run() = %#v, want x as top item", got)
+	}
+}
+
+func TestApproximateHandlesHighCardinalityInput(t *testing.T) {
+	t.Parallel()
+
+	var input strings.Builder
+	for i := range 10_000 {
+		fmt.Fprintln(&input, i)
+	}
+	for range 1_000 {
+		fmt.Fprintln(&input, "heavy")
+	}
+	path := writeInput(t, input.String())
+	got, err := Run([]string{path}, Config{Top: 1, Capacity: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Item != "heavy" {
+		t.Fatalf("Run() = %#v, want heavy as top item", got)
 	}
 }
 
