@@ -1,6 +1,7 @@
 package heavy
 
 import (
+	"container/heap"
 	"fmt"
 	"sort"
 
@@ -18,6 +19,41 @@ type Result struct {
 	Rank          int    `json:"rank"`
 	Item          string `json:"item"`
 	CountEstimate uint64 `json:"count_estimate"`
+}
+
+type trackedItem struct {
+	item  string
+	count uint64
+	index int
+}
+
+type minItems []*trackedItem
+
+func (h minItems) Len() int { return len(h) }
+func (h minItems) Less(i, j int) bool {
+	if h[i].count == h[j].count {
+		return h[i].item < h[j].item
+	}
+	return h[i].count < h[j].count
+}
+func (h minItems) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+	h[i].index = i
+	h[j].index = j
+}
+func (h *minItems) Push(value any) {
+	item := value.(*trackedItem)
+	item.index = len(*h)
+	*h = append(*h, item)
+}
+func (h *minItems) Pop() any {
+	old := *h
+	last := len(old) - 1
+	item := old[last]
+	old[last] = nil
+	item.index = -1
+	*h = old[:last]
+	return item
 }
 
 func Run(paths []string, cfg Config) ([]Result, error) {
@@ -51,35 +87,37 @@ func exact(paths []string, cfg Config) ([]Result, error) {
 }
 
 func approximate(paths []string, cfg Config) ([]Result, error) {
-	counts := map[string]uint64{}
+	tracked := map[string]*trackedItem{}
+	var items minItems
 	if err := prob.EachInput(paths, cfg.Input, func(item []byte) error {
 		key := string(item)
-		if _, ok := counts[key]; ok {
-			counts[key]++
+		if existing, ok := tracked[key]; ok {
+			existing.count++
+			heap.Fix(&items, existing.index)
 			return nil
 		}
-		if len(counts) < cfg.Capacity {
-			counts[key] = 1
+		if len(tracked) < cfg.Capacity {
+			entry := &trackedItem{item: key, count: 1}
+			tracked[key] = entry
+			heap.Push(&items, entry)
 			return nil
 		}
 
-		minKey := ""
-		var minCount uint64
-		first := true
-		for k, count := range counts {
-			if first || count < minCount || count == minCount && k < minKey {
-				minKey = k
-				minCount = count
-				first = false
-			}
-		}
-		delete(counts, minKey)
-		counts[key] = minCount + 1
+		replaced := heap.Pop(&items).(*trackedItem)
+		delete(tracked, replaced.item)
+		replaced.item = key
+		replaced.count++
+		tracked[key] = replaced
+		heap.Push(&items, replaced)
 		return nil
 	}); err != nil {
 		return nil, err
 	}
-	return ranked(counts, cfg.Top), nil
+	results := make([]Result, 0, len(tracked))
+	for item, entry := range tracked {
+		results = append(results, Result{Item: item, CountEstimate: entry.count})
+	}
+	return rank(results, cfg.Top), nil
 }
 
 func ranked(counts map[string]uint64, top int) []Result {
@@ -87,6 +125,10 @@ func ranked(counts map[string]uint64, top int) []Result {
 	for item, count := range counts {
 		items = append(items, Result{Item: item, CountEstimate: count})
 	}
+	return rank(items, top)
+}
+
+func rank(items []Result, top int) []Result {
 	sort.Slice(items, func(i, j int) bool {
 		if items[i].CountEstimate == items[j].CountEstimate {
 			return items[i].Item < items[j].Item
