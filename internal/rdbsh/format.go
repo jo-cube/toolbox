@@ -32,6 +32,16 @@ func formatBytes(data []byte) string {
 	return fmt.Sprintf("0x%x", data)
 }
 
+func formatExportBytes(data []byte) string {
+	if len(data) > 0 && isPrintable(data) {
+		text := string(data)
+		if !strings.HasPrefix(text, "0x") && !strings.HasPrefix(text, "0X") {
+			return text
+		}
+	}
+	return fmt.Sprintf("0x%x", data)
+}
+
 func parseInput(value string) ([]byte, error) {
 	if strings.HasPrefix(value, "0x") || strings.HasPrefix(value, "0X") {
 		decoded, err := hex.DecodeString(value[2:])

@@ -92,3 +92,30 @@ func TestParseInput(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatExportBytesIsReadableAndRoundTrips(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		data []byte
+		want string
+	}{
+		{data: []byte("hello"), want: "hello"},
+		{data: nil, want: "0x"},
+		{data: []byte{0}, want: "0x00"},
+		{data: []byte("0x00"), want: "0x30783030"},
+	}
+	for _, tt := range tests {
+		got := formatExportBytes(tt.data)
+		if got != tt.want {
+			t.Errorf("formatExportBytes(%q) = %q, want %q", tt.data, got, tt.want)
+		}
+		roundTrip, err := parseInput(got)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(roundTrip) != string(tt.data) {
+			t.Errorf("parseInput(formatExportBytes(%q)) = %q", tt.data, roundTrip)
+		}
+	}
+}
