@@ -14,7 +14,9 @@ import (
 )
 
 func main() {
-	showVersion := flag.Bool("version", false, "print version information")
+	var showVersion bool
+	flag.BoolVar(&showVersion, "version", false, "print version information")
+	flag.BoolVar(&showVersion, "V", false, "print version information")
 	configFile := flag.String("F", "", "path to kcat-style config file (librdkafka key=value format) [required]")
 	groupID := flag.String("group", "", "consumer group ID [required]")
 	topic := flag.String("topic", "", "kafka topic [required]")
@@ -50,7 +52,11 @@ Options:
 
 	flag.Parse()
 
-	if *showVersion {
+	if showVersion {
+		if len(os.Args) != 2 || (os.Args[1] != "--version" && os.Args[1] != "-V") {
+			flag.Usage()
+			os.Exit(2)
+		}
 		fmt.Fprintf(os.Stdout, "ksetoff %s\n", buildinfo.Version())
 		return
 	}
@@ -72,6 +78,10 @@ Options:
 	}
 	if *offsetRaw == "" {
 		missing = append(missing, "-offset")
+	}
+	if *timeout <= 0 {
+		fmt.Fprintln(os.Stderr, "ksetoff: -timeout must be greater than zero")
+		os.Exit(2)
 	}
 	if len(missing) > 0 {
 		fmt.Fprintf(os.Stderr, "ksetoff: missing required flag(s): %s\n\n", strings.Join(missing, ", "))
@@ -100,12 +110,11 @@ Options:
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
-	admin, cleanup, err := ksetoff.NewAdminClient(ctx, kafkaConfig)
+	admin, err := ksetoff.NewAdminClient(ctx, kafkaConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ksetoff: %v\n", err)
 		os.Exit(1)
 	}
-	defer cleanup()
 	defer admin.Close()
 
 	err = ksetoff.Run(ctx, admin, ksetoff.RunParams{

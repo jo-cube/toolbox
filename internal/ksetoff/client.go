@@ -82,29 +82,24 @@ func BuildClientOpts(cfg *KafkaConfig) ([]kgo.Opt, error) {
 	return opts, nil
 }
 
-func NewAdminClient(ctx context.Context, cfg *KafkaConfig) (*kadm.Client, func(), error) {
+func NewAdminClient(ctx context.Context, cfg *KafkaConfig) (*kadm.Client, error) {
 	opts, err := BuildClientOpts(cfg)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	client, err := kgo.NewClient(opts...)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create kafka client: %w", err)
-	}
-
-	cleanup := func() {
-		client.Close()
+		return nil, fmt.Errorf("failed to create kafka client: %w", err)
 	}
 
 	if err := client.Ping(ctx); err != nil {
-		cleanup()
+		client.Close()
 		if netErr, ok := err.(*net.OpError); ok {
-			return nil, nil, fmt.Errorf("cannot connect to kafka at %s: %w", netErr.Addr, netErr.Err)
+			return nil, fmt.Errorf("cannot connect to kafka at %s: %w", netErr.Addr, netErr.Err)
 		}
-		return nil, nil, fmt.Errorf("cannot connect to kafka brokers (%s): %w", strings.Join(cfg.Brokers, ","), err)
+		return nil, fmt.Errorf("cannot connect to kafka brokers (%s): %w", strings.Join(cfg.Brokers, ","), err)
 	}
 
-	admin := kadm.NewClient(client)
-	return admin, cleanup, nil
+	return kadm.NewClient(client), nil
 }

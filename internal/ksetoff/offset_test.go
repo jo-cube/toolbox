@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kadm"
+	"github.com/twmb/franz-go/pkg/kerr"
 )
 
 func TestParseOffsetSpec(t *testing.T) {
@@ -146,5 +147,19 @@ func TestTimestampOffsetOrHighWatermark(t *testing.T) {
 	}
 	if got := timestampOffsetOrHighWatermark(-1, wm); got != 20 {
 		t.Fatalf("timestampOffsetOrHighWatermark() = %d, want high watermark 20", got)
+	}
+}
+
+func TestIsActiveGroupError(t *testing.T) {
+	t.Parallel()
+
+	if !isActiveGroupError(kerr.IllegalGeneration) {
+		t.Fatal("IllegalGeneration was not recognized as an active group error")
+	}
+	if !isActiveGroupError(kerr.NonEmptyGroup) {
+		t.Fatal("NonEmptyGroup was not recognized as an active group error")
+	}
+	if isActiveGroupError(errors.New("unrelated")) {
+		t.Fatal("unrelated error was recognized as an active group error")
 	}
 }
