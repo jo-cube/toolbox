@@ -105,6 +105,7 @@ func build(args []string, in io.Reader, out, errOut io.Writer) error {
 		fmt.Fprint(fs.Output(), `Usage: kshape build [options] > topic.kshape
 
 Read canonical records from stdin and write a binary summary to stdout.
+Partitions may interleave; offsets must increase within each partition.
 
 Options:
 `)
@@ -172,7 +173,7 @@ func merge(args []string, out, errOut io.Writer) error {
 		fmt.Fprint(fs.Output(), `Usage: kshape merge <file.kshape> <file.kshape>... > merged.kshape
 
 Merge artifacts with matching topic, bucket width, precision, version, and hash.
-Observed offset spans within the same finest bucket must not overlap.
+Observed offset coverage within the same finest bucket must not overlap.
 `)
 	}
 	if err := parseFlags(fs, args); err != nil {
@@ -221,9 +222,9 @@ func readSummary(path string) (*kshape.Summary, error) {
 }
 
 func writeReport(out io.Writer, report kshape.Report) error {
-	if _, err := fmt.Fprintf(out, "type=%s\nversion=%d\ntopic=%s\nartifact_bucket_width=%d\nreport_bucket_width=%d\nhll_precision=%d\nhash=%s\nhll_relative_error=%.2f%%\n",
+	if _, err := fmt.Fprintf(out, "type=%s\nversion=%d\ntopic=%s\nartifact_bucket_width=%d\nreport_bucket_width=%d\nhll_precision=%d\nhll_version=%d\nhash=%s\nchecksum=%s\nhll_relative_error=%.2f%%\n",
 		report.Type, report.Version, report.Topic, report.ArtifactBucketWidth, report.ReportBucketWidth,
-		report.HLLPrecision, report.Hash, report.HLLRelativeError*100); err != nil {
+		report.HLLPrecision, report.HLLVersion, report.Hash, report.Checksum, report.HLLRelativeError*100); err != nil {
 		return err
 	}
 	for _, partition := range report.Partitions {
@@ -233,12 +234,12 @@ func writeReport(out io.Writer, report kshape.Report) error {
 				minTimestamp = fmt.Sprint(*region.MinTimestamp)
 				maxTimestamp = fmt.Sprint(*region.MaxTimestamp)
 			}
-			if _, err := fmt.Fprintf(out, "partition=%d region=%d..%d observed_offsets=%d..%d observed_span=%d visible_records=%d observed_occupancy=%.6f logical_payload_bytes=%d visible_tombstones=%d null_keys=%d missing_timestamps=%d min_timestamp=%s max_timestamp=%s approx_distinct_keys=%d approx_visible_rewrite_factor=%.3f\n",
+			if _, err := fmt.Fprintf(out, "partition=%d region=%d..%d observed_offsets=%d..%d observed_span=%d observed_records=%d observed_occupancy=%.6f logical_payload_bytes=%d observed_tombstones=%d null_keys=%d keyed_records=%d missing_timestamps=%d min_timestamp=%s max_timestamp=%s approx_distinct_keys=%d approx_keyed_records_per_distinct_key=%.3f\n",
 				partition.Partition, region.RegionFirstOffset, region.RegionLastOffset,
 				region.ObservedFirstOffset, region.ObservedLastOffset, region.ObservedSpan,
-				region.VisibleRecords, region.ObservedOccupancy, region.LogicalPayloadBytes,
-				region.VisibleTombstones, region.NullKeys, region.MissingTimestamps,
-				minTimestamp, maxTimestamp, region.ApproxDistinctKeys, region.ApproxVisibleRewriteFactor); err != nil {
+				region.ObservedRecords, region.ObservedOccupancy, region.LogicalPayloadBytes,
+				region.ObservedTombstones, region.NullKeys, region.KeyedRecords, region.MissingTimestamps,
+				minTimestamp, maxTimestamp, region.ApproxDistinctKeys, region.ApproxRecordsPerKey); err != nil {
 				return err
 			}
 		}

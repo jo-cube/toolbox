@@ -15,7 +15,7 @@ kshape merge /tmp/a.kshape /tmp/b.kshape > /tmp/merged.kshape
 kshape inspect /tmp/merged.kshape | grep -q 'type=kafka-retained-log-shape' ||
 	fail "kshape inspect"
 kshape inspect --json --bucket-width 8 /tmp/merged.kshape |
-	jq -e '.topic == "events" and (.partitions | length) == 2 and .partitions[0].regions[0].visible_tombstones == 1' >/dev/null ||
+	jq -e '.topic == "events" and (.partitions | length) == 2 and .partitions[0].regions[0].observed_tombstones == 1' >/dev/null ||
 	fail "kshape inspect json"
 
 printf 'not a kshape file\n' > /tmp/bad.kshape

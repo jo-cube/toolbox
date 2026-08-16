@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jo-cube/toolbox/internal/kshape"
@@ -46,12 +47,26 @@ func TestFormatBuildInspectAndMergePipeline(t *testing.T) {
 	if report.Topic != "events" || len(report.Partitions) != 2 {
 		t.Fatalf("report = %#v", report)
 	}
+	if report.Version != kshape.Version || report.Checksum != kshape.ChecksumName || report.Partitions[0].Regions[0].ObservedRecords != 1 {
+		t.Fatalf("report metadata = %#v", report)
+	}
+
+	inspectOut.Reset()
+	errOut.Reset()
+	if status := run([]string{"inspect", mergedPath}, nil, &inspectOut, &errOut); status != 0 {
+		t.Fatalf("inspect status = %d, stderr = %s", status, errOut.String())
+	}
+	for _, want := range []string{"checksum=crc32c", "observed_records=1", "keyed_records=1"} {
+		if !strings.Contains(inspectOut.String(), want) {
+			t.Errorf("inspect output %q does not contain %q", inspectOut.String(), want)
+		}
+	}
 }
 
 func TestRunExitStatuses(t *testing.T) {
 	t.Parallel()
 
-	for _, args := range [][]string{nil, {"nope"}, {"build", "extra"}, {"build", "--precision", "99"}} {
+	for _, args := range [][]string{nil, {"nope"}, {"build", "extra"}, {"build", "--precision", "99"}, {"build", "--bucket-width", "0"}} {
 		var out, errOut bytes.Buffer
 		if status := run(args, bytes.NewReader(nil), &out, &errOut); status != 2 {
 			t.Errorf("run(%v) status = %d, want 2", args, status)
