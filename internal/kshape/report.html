@@ -127,7 +127,7 @@ footer { padding: 18px 0 40px; font-size: 11px; }
   <section aria-labelledby="shape-heading">
     <div class="section-head">
       <h2 id="shape-heading">Partition × offset-space shape</h2>
-      <p>Rows contain no claim about offsets before the first or after the last supplied record. Select a partition, then zoom to switch automatically to finer aligned summaries.</p>
+      <p>Rows contain no claim about offsets before the first or after the last supplied record. Select a partition, then zoom to switch automatically to finer aligned summaries. Zoom stops at the artifact’s finest bucket width.</p>
     </div>
     <div class="controls">
       <label>Metric
@@ -254,6 +254,11 @@ footer { padding: 18px 0 40px; font-size: 11px; }
       ? `${date.toISOString()} (${fmtInt(value)} ms)` : `${fmtInt(value)} ms`;
   };
   const partitionByID = id => data.partitions.find(partition => partition.id === id);
+  const minimumViewSize = partition => {
+    const full = B(partition.last) - B(partition.first) + 1n;
+    const finest = B(partition.levels[0].width);
+    return finest < full ? finest : full;
+  };
 
   function metricValue(region) {
     switch (metric.value) {
@@ -378,8 +383,8 @@ footer { padding: 18px 0 40px; font-size: 11px; }
     });
     svg.addEventListener("click", event => {
       const target = event.target.closest && event.target.closest("rect[data-index]");
-      if (target) inspectRegion(row.partition, row.regions[Number(target.dataset.index)]);
       selectPartition(row.partition);
+      if (target) inspectRegion(row.partition, row.regions[Number(target.dataset.index)]);
     });
     svg.addEventListener("keydown", event => {
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectPartition(row.partition); }
@@ -417,8 +422,9 @@ footer { padding: 18px 0 40px; font-size: 11px; }
     const fullStart = B(partition.first), fullEnd = B(partition.last);
     const [start, end] = state.range;
     const size = end - start + 1n;
-    if (size <= 1n) return;
-    const nextSize = size / divisor > 0n ? size / divisor : 1n;
+    const minimum = minimumViewSize(partition);
+    if (size <= minimum) return;
+    const nextSize = size / divisor > minimum ? size / divisor : minimum;
     const center = state.anchor == null ? (start + end) / 2n : state.anchor;
     let nextStart = center - nextSize / 2n;
     let nextEnd = nextStart + nextSize - 1n;
@@ -449,10 +455,12 @@ footer { padding: 18px 0 40px; font-size: 11px; }
     const fixedScale = metric.value === "occupancy" || metric.value === "tombstones";
     scale.disabled = fixedScale;
     allButton.disabled = state.selected == null;
-    zoomIn.disabled = state.selected == null || state.range[0] === state.range[1];
-    if (state.selected == null) zoomOut.disabled = true;
-    else {
+    if (state.selected == null) {
+      zoomIn.disabled = true;
+      zoomOut.disabled = true;
+    } else {
       const partition = partitionByID(state.selected);
+      zoomIn.disabled = state.range[1] - state.range[0] + 1n <= minimumViewSize(partition);
       zoomOut.disabled = state.range[0] === B(partition.first) && state.range[1] === B(partition.last);
     }
   }

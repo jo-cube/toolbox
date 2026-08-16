@@ -33,7 +33,8 @@ func TestRenderProducesDeterministicOfflineMultiresolutionReport(t *testing.T) {
 	html := first.String()
 	for _, want := range []string{
 		"<!doctype html>", "Partition × offset-space shape", "Approx. distinct keys",
-		"theoretical relative error 6.50%", "shape &lt;/title&gt;&lt;script&gt;alert",
+		"theoretical relative error 6.50%", "Zoom stops at the artifact’s finest bucket width",
+		"shape &lt;/title&gt;&lt;script&gt;alert",
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("rendered HTML does not contain %q", want)
