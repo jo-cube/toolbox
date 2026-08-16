@@ -12,6 +12,10 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	var showVersion bool
 	flag.BoolVar(&showVersion, "version", false, "print version information")
 	flag.BoolVar(&showVersion, "V", false, "print version information")
@@ -50,39 +54,38 @@ Options:
 	if showVersion {
 		if len(os.Args) != 2 || (os.Args[1] != "--version" && os.Args[1] != "-V") {
 			flag.Usage()
-			os.Exit(2)
+			return 2
 		}
 		fmt.Fprintf(os.Stdout, "rdbsh %s\n", buildinfo.Version())
-		return
+		return 0
 	}
 
 	if flag.NArg() != 0 {
 		flag.Usage()
-		os.Exit(2)
+		return 2
 	}
 
 	if *dbPath == "" {
 		fmt.Fprintln(os.Stderr, "rdbsh: missing required flag: --db")
 		fmt.Fprintln(os.Stderr)
 		flag.Usage()
-		os.Exit(2)
+		return 2
 	}
 
 	info, err := os.Stat(*dbPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "rdbsh: cannot access %q: %v\n", *dbPath, err)
-		os.Exit(1)
+		return 1
 	}
 	if !info.IsDir() {
 		fmt.Fprintf(os.Stderr, "rdbsh: %q is not a directory\n", *dbPath)
-		os.Exit(1)
+		return 1
 	}
 
 	shell, err := rdbsh.NewShell(rdbsh.Config{
 		DBPath:       *dbPath,
 		Writable:     *writable,
 		ColumnFamily: strings.TrimSpace(*columnFamily),
-		ExecCommand:  *execCommand,
 		Force:        *force,
 		In:           os.Stdin,
 		Out:          os.Stdout,
@@ -90,20 +93,21 @@ Options:
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "rdbsh: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 	defer shell.Close()
 
 	if strings.TrimSpace(*execCommand) != "" {
 		if err := shell.Exec(*execCommand); err != nil {
 			fmt.Fprintf(os.Stderr, "rdbsh: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
-		return
+		return 0
 	}
 
 	if err := shell.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "rdbsh: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
