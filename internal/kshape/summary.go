@@ -247,66 +247,85 @@ func (s *Summary) Report(bucketWidth uint64) (Report, error) {
 	partitionIDs := sortedPartitions(s.Partitions)
 	for _, partitionID := range partitionIDs {
 		partition := s.Partitions[partitionID]
-		groups := make(map[uint64]*Region)
+		buckets := sortedRegions(partition.Regions)
 		factor := uint64(0)
 		if bucketWidth != 0 {
 			factor = bucketWidth / s.BucketWidth
 		}
-		for _, bucket := range sortedRegions(partition.Regions) {
-			region := partition.Regions[bucket]
-			group := uint64(0)
-			if factor != 0 {
-				group = bucket / factor
-			}
-			if groups[group] == nil {
-				groups[group] = cloneRegion(region)
-			} else if err := mergeMetrics(groups[group], region); err != nil {
-				return Report{}, err
-			}
+		capacity := 0
+		if factor == 0 {
+			capacity = 1
+		} else if factor == 1 {
+			capacity = len(buckets)
 		}
 		partitionReport := PartitionReport{
 			Partition: partitionID,
-			Regions:   make([]RegionReport, 0, len(groups)),
+			Regions:   make([]RegionReport, 0, capacity),
 		}
-		for _, group := range sortedRegions(groups) {
-			region := groups[group]
-			first, last := uint64(region.FirstOffset), uint64(region.LastOffset)
-			if bucketWidth != 0 {
-				first = group * bucketWidth
-				last = first + bucketWidth - 1
-				last = min(last, uint64(math.MaxInt64))
+		if factor == 1 {
+			for _, bucket := range buckets {
+				partitionReport.Regions = append(partitionReport.Regions, makeRegionReport(partition.Regions[bucket], bucket, bucketWidth))
 			}
-			span := uint64(region.LastOffset-region.FirstOffset) + 1
-			keyedRecords := region.Records - region.NullKeys
-			distinctKeys := min(region.Keys.Estimate(), keyedRecords)
-			regionReport := RegionReport{
-				RegionFirstOffset:   first,
-				RegionLastOffset:    last,
-				ObservedFirstOffset: region.FirstOffset,
-				ObservedLastOffset:  region.LastOffset,
-				ObservedSpan:        span,
-				ObservedRecords:     region.Records,
-				ObservedOccupancy:   float64(region.Records) / float64(span),
-				LogicalPayloadBytes: region.PayloadBytes,
-				ObservedTombstones:  region.Tombstones,
-				NullKeys:            region.NullKeys,
-				KeyedRecords:        keyedRecords,
-				MissingTimestamps:   region.MissingTimestamps,
-				ApproxDistinctKeys:  distinctKeys,
+		} else {
+			var group uint64
+			var region *Region
+			for _, bucket := range buckets {
+				nextGroup := uint64(0)
+				if factor != 0 {
+					nextGroup = bucket / factor
+				}
+				if region != nil && nextGroup != group {
+					partitionReport.Regions = append(partitionReport.Regions, makeRegionReport(region, group, bucketWidth))
+					region = nil
+				}
+				if region == nil {
+					group, region = nextGroup, cloneRegion(partition.Regions[bucket])
+				} else if err := mergeMetrics(region, partition.Regions[bucket]); err != nil {
+					return Report{}, err
+				}
 			}
-			if region.MissingTimestamps != region.Records {
-				minTimestamp, maxTimestamp := region.MinTimestamp, region.MaxTimestamp
-				regionReport.MinTimestamp = &minTimestamp
-				regionReport.MaxTimestamp = &maxTimestamp
+			if region != nil {
+				partitionReport.Regions = append(partitionReport.Regions, makeRegionReport(region, group, bucketWidth))
 			}
-			if distinctKeys != 0 {
-				regionReport.ApproxRecordsPerKey = float64(keyedRecords) / float64(distinctKeys)
-			}
-			partitionReport.Regions = append(partitionReport.Regions, regionReport)
 		}
 		report.Partitions = append(report.Partitions, partitionReport)
 	}
 	return report, nil
+}
+
+func makeRegionReport(region *Region, group, bucketWidth uint64) RegionReport {
+	first, last := uint64(region.FirstOffset), uint64(region.LastOffset)
+	if bucketWidth != 0 {
+		first = group * bucketWidth
+		last = min(first+bucketWidth-1, uint64(math.MaxInt64))
+	}
+	span := uint64(region.LastOffset-region.FirstOffset) + 1
+	keyedRecords := region.Records - region.NullKeys
+	distinctKeys := min(region.Keys.Estimate(), keyedRecords)
+	report := RegionReport{
+		RegionFirstOffset:   first,
+		RegionLastOffset:    last,
+		ObservedFirstOffset: region.FirstOffset,
+		ObservedLastOffset:  region.LastOffset,
+		ObservedSpan:        span,
+		ObservedRecords:     region.Records,
+		ObservedOccupancy:   float64(region.Records) / float64(span),
+		LogicalPayloadBytes: region.PayloadBytes,
+		ObservedTombstones:  region.Tombstones,
+		NullKeys:            region.NullKeys,
+		KeyedRecords:        keyedRecords,
+		MissingTimestamps:   region.MissingTimestamps,
+		ApproxDistinctKeys:  distinctKeys,
+	}
+	if region.MissingTimestamps != region.Records {
+		minTimestamp, maxTimestamp := region.MinTimestamp, region.MaxTimestamp
+		report.MinTimestamp = &minTimestamp
+		report.MaxTimestamp = &maxTimestamp
+	}
+	if distinctKeys != 0 {
+		report.ApproxRecordsPerKey = float64(keyedRecords) / float64(distinctKeys)
+	}
+	return report
 }
 
 func validateConfig(bucketWidth uint64, precision uint8) error {
