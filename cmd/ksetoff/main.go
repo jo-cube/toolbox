@@ -14,6 +14,10 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	var showVersion bool
 	flag.BoolVar(&showVersion, "version", false, "print version information")
 	flag.BoolVar(&showVersion, "V", false, "print version information")
@@ -55,15 +59,15 @@ Options:
 	if showVersion {
 		if len(os.Args) != 2 || (os.Args[1] != "--version" && os.Args[1] != "-V") {
 			flag.Usage()
-			os.Exit(2)
+			return 2
 		}
 		fmt.Fprintf(os.Stdout, "ksetoff %s\n", buildinfo.Version())
-		return
+		return 0
 	}
 
 	if flag.NArg() != 0 {
 		flag.Usage()
-		os.Exit(2)
+		return 2
 	}
 
 	var missing []string
@@ -81,30 +85,30 @@ Options:
 	}
 	if *timeout <= 0 {
 		fmt.Fprintln(os.Stderr, "ksetoff: -timeout must be greater than zero")
-		os.Exit(2)
+		return 2
 	}
 	if len(missing) > 0 {
 		fmt.Fprintf(os.Stderr, "ksetoff: missing required flag(s): %s\n\n", strings.Join(missing, ", "))
 		flag.Usage()
-		os.Exit(2)
+		return 2
 	}
 
 	spec, err := ksetoff.ParseOffsetSpec(*offsetRaw)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ksetoff: %v\n", err)
-		os.Exit(2)
+		return 2
 	}
 
 	requestedPartitions, err := ksetoff.ParsePartitions(*partitionsRaw)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ksetoff: %v\n", err)
-		os.Exit(2)
+		return 2
 	}
 
 	kafkaConfig, err := ksetoff.ParseConfigFile(*configFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ksetoff: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
@@ -113,7 +117,7 @@ Options:
 	admin, err := ksetoff.NewAdminClient(ctx, kafkaConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ksetoff: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 	defer admin.Close()
 
@@ -128,6 +132,7 @@ Options:
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ksetoff: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
