@@ -49,7 +49,10 @@ func Precision(value uint) (uint8, error) {
 }
 
 func (s *Sketch) Add(item []byte) {
-	x := prob.Hash64(item, 0)
+	s.AddHash(prob.Hash64(item, 0))
+}
+
+func (s *Sketch) AddHash(x uint64) {
 	idx := x >> (64 - s.Precision)
 	remaining := x << s.Precision
 
