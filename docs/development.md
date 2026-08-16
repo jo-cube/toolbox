@@ -116,7 +116,9 @@ It checks version aliases, help output, representative exit statuses, and the `h
 - reads only the fixed formatter expression printed by `kshape format`
 - summarizes one observed topic in power-of-two offset buckets
 - stores exact counters and one mergeable HLL sketch per non-empty bucket
-- rejects artifact merges whose observed spans overlap within a finest bucket
+- retains disjoint merge-guard spans so overlap checks stay order-independent
+- rejects duplicate or decreasing offsets within a partition
+- protects version 2 artifacts with a CRC32C checksum
 
 `rdbsh`:
 
