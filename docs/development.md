@@ -87,10 +87,11 @@ go test ./internal/prob ./internal/hll ./internal/bf ./internal/card ./internal/
 The full suite is:
 
 ```sh
-go test ./...
+make test
 ```
 
-`go test ./...` requires RocksDB development headers because `rdbsh` uses CGo.
+`make test` requires RocksDB development headers because `rdbsh` uses CGo and
+applies the detected RocksDB compiler and linker flags.
 
 After building, run the small local CLI smoke suite:
 
