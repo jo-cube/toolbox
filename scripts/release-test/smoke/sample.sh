@@ -29,6 +29,8 @@ cmp /tmp/sample-preserve.txt /tmp/sample-preserve.out || fail "sample preserves 
 
 expect_status 2 "sample ambiguous flags" \
 	sample --rate 0.1 --count 10 /tmp/sample-values.txt
+expect_status 2 "sample rejects explicitly set zero count with rate" \
+	sample --rate 0.1 --count 0 /tmp/sample-values.txt
 expect_status 2 "sample rejects stable count" \
 	sample --count 10 --stable /tmp/sample-values.txt
 expect_status 2 "sample requires mode" sample /tmp/sample-values.txt

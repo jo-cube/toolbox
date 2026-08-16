@@ -63,6 +63,15 @@ jobs:
           - cli: ksetoff
             goos: darwin
             goarch: arm64
+          - cli: kshape
+            goos: linux
+            goarch: amd64
+          - cli: kshape
+            goos: linux
+            goarch: arm64
+          - cli: kshape
+            goos: darwin
+            goarch: arm64
           - cli: hll
             goos: linux
             goarch: amd64

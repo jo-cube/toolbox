@@ -52,12 +52,13 @@ Options:
 	}
 
 	cfg := sample.Config{
-		Rate:    *rate,
-		RateSet: flagWasSet("rate"),
-		Count:   *count,
-		Stable:  *stable,
-		Seed:    *seed,
-		SeedSet: flagWasSet("seed"),
+		Rate:     *rate,
+		RateSet:  flagWasSet("rate"),
+		Count:    *count,
+		CountSet: flagWasSet("count"),
+		Stable:   *stable,
+		Seed:     *seed,
+		SeedSet:  flagWasSet("seed"),
 	}
 	if err := sample.Validate(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "sample: %v\n", err)

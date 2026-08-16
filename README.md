@@ -14,7 +14,7 @@ curl -fsSL https://raw.githubusercontent.com/jo-cube/toolbox/main/scripts/instal
 
 The installer verifies the downloaded release archive against the matching SHA256 checksum asset.
 
-Valid tool names: `hello`, `ksetoff`, `rdbsh`, `hll`, `bf`, `card`, `heavy`, `sample`.
+Valid tool names: `hello`, `ksetoff`, `kshape`, `rdbsh`, `hll`, `bf`, `card`, `heavy`, `sample`.
 
 For example:
 
@@ -50,6 +50,7 @@ Release binaries are published for:
 | --- | --- | --- |
 | `hello` | Minimal reference CLI used as the simplest implementation example. | [`docs/hello.md`](docs/hello.md) |
 | `ksetoff` | Set Kafka consumer group offsets for a topic without starting the consumer app. | [`docs/ksetoff.md`](docs/ksetoff.md) |
+| `kshape` | Summarize and render the observed shape of a Kafka record stream across partitions and offsets. | [`docs/kshape.md`](docs/kshape.md) |
 | `rdbsh` | Inspect local RocksDB databases interactively or with one-shot commands. | [`docs/rdbsh.md`](docs/rdbsh.md) |
 | `hll` | Estimate unique values in large streams with HyperLogLog. | [`docs/hll.md`](docs/hll.md) |
 | `bf` | Build and query Bloom filters for approximate membership tests. | [`docs/bf.md`](docs/bf.md) |
@@ -69,6 +70,14 @@ Inspect a RocksDB key:
 
 ```sh
 rdbsh --db /tmp/store --exec "get 0x00000001"
+```
+
+Build and inspect an observed Kafka log-shape summary:
+
+```sh
+jkq -F kafka.conf -t events --snapshot -f "$(kshape format)" |
+  kshape build > events.kshape
+kshape render events.kshape > events.html
 ```
 
 Estimate unique users:
@@ -111,7 +120,7 @@ sample --rate 0.01 --stable events.jsonl
 - `rdbsh` opens databases read-only unless `--writable` is set.
 - `rdbsh export <file>` refuses to overwrite an existing file unless `--force` is set.
 - Probabilistic stream tools read from stdin by default and keep diagnostics on stderr.
-- `hll` and `bf` state files are binary, versioned, and checked before use.
+- `hll`, `bf`, and `kshape` state files are binary, versioned, and checked before use.
 
 Shared behavior for `hll`, `bf`, `card`, `heavy`, and `sample` is documented in [`docs/probabilistic-tools.md`](docs/probabilistic-tools.md).
 
@@ -128,6 +137,7 @@ Run a tool from source:
 ```sh
 make run-hello
 make run-ksetoff ARGS='-h'
+make run-kshape ARGS='inspect events.kshape'
 make run-rdbsh ARGS='--db /path/to/db'
 make run-hll ARGS='count values.txt'
 make run-bf ARGS='inspect known.bf'

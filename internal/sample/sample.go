@@ -13,22 +13,26 @@ import (
 )
 
 type Config struct {
-	Rate    float64
-	RateSet bool
-	Count   int
-	Stable  bool
-	Seed    int64
-	SeedSet bool
+	Rate     float64
+	RateSet  bool
+	Count    int
+	CountSet bool
+	Stable   bool
+	Seed     int64
+	SeedSet  bool
 }
 
 func Validate(cfg Config) error {
-	hasRate := cfg.RateSet || cfg.Rate > 0
-	hasCount := cfg.Count > 0
+	hasRate := cfg.RateSet || cfg.Rate != 0
+	hasCount := cfg.CountSet || cfg.Count != 0
 	if hasRate == hasCount {
 		return fmt.Errorf("set exactly one of --rate or --count")
 	}
 	if math.IsNaN(cfg.Rate) || math.IsInf(cfg.Rate, 0) || cfg.Rate < 0 || cfg.Rate > 1 {
 		return fmt.Errorf("rate must be between 0 and 1")
+	}
+	if hasCount && cfg.Count <= 0 {
+		return fmt.Errorf("count must be a positive integer")
 	}
 	if cfg.Stable && hasCount {
 		return fmt.Errorf("--stable can only be used with --rate")
@@ -66,6 +70,9 @@ func rateStable(paths []string, cfg Config, out io.Writer) error {
 		key := record
 		if len(key) > 0 && key[len(key)-1] == '\n' {
 			key = key[:len(key)-1]
+			if len(key) > 0 && key[len(key)-1] == '\r' {
+				key = key[:len(key)-1]
+			}
 		}
 		if cfg.Rate >= 1 || prob.Hash64(key, uint64(cfg.Seed)) < threshold {
 			_, err := out.Write(record)
@@ -77,7 +84,7 @@ func rateStable(paths []string, cfg Config, out io.Writer) error {
 
 func reservoir(paths []string, cfg Config, out io.Writer) error {
 	rng := rand.New(rand.NewSource(seed(cfg)))
-	items := make([][]byte, 0, cfg.Count)
+	var items [][]byte
 	var seen int64
 
 	if err := eachRaw(paths, func(record []byte) error {

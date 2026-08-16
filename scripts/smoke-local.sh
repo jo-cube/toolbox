@@ -17,7 +17,7 @@ expect_status() {
 	fi
 }
 
-for tool in hello ksetoff rdbsh hll bf card heavy sample; do
+for tool in hello ksetoff kshape rdbsh hll bf card heavy sample; do
 	expect_status 0 "$bin/$tool" --version
 	"$bin/$tool" --version | grep -q "^$tool "
 	expect_status 0 "$bin/$tool" -V
@@ -32,6 +32,7 @@ done
 [ "$("$bin/hello")" = "Hello, world!" ]
 expect_status 2 "$bin/hello" extra
 expect_status 2 "$bin/ksetoff"
+expect_status 2 "$bin/kshape" nope
 expect_status 2 "$bin/rdbsh"
 expect_status 2 "$bin/hll" nope
 expect_status 2 "$bin/bf" nope

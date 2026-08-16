@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}}</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0b1115;
+  --panel: #111a20;
+  --panel-2: #16232a;
+  --line: #2b3b43;
+  --muted: #91a3aa;
+  --text: #ecf2f3;
+  --accent: #62b7a8;
+  --hot: #f2d06b;
+  --focus: #9bd9ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.45; }
+header, main, footer { width: min(1500px, calc(100% - 32px)); margin-inline: auto; }
+header { padding: 42px 0 22px; }
+.eyebrow { color: var(--accent); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
+h1 { margin: 7px 0 3px; font-size: clamp(24px, 4vw, 42px); line-height: 1.15; overflow-wrap: anywhere; }
+h2 { margin: 0; font-size: 17px; }
+h3 { margin: 0; font-size: 14px; }
+p { margin: 7px 0; }
+.subtitle, .hint, footer { color: var(--muted); }
+code { color: #b8e4dc; }
+main { display: grid; gap: 18px; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 18px; margin-bottom: 14px; }
+.section-head p { margin: 0; max-width: 850px; font-size: 12px; }
+.cards { display: grid; grid-template-columns: repeat(6, minmax(140px, 1fr)); gap: 10px; }
+.card { min-width: 0; padding: 12px; background: var(--panel-2); border-left: 3px solid var(--accent); }
+.card .label { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.card .value { display: block; margin-top: 5px; font-size: clamp(17px, 2vw, 24px); overflow-wrap: anywhere; }
+.card .detail { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 13px; color: var(--muted); font-size: 12px; }
+.facts strong { color: var(--text); font-weight: 500; }
+.controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-bottom: 12px; }
+label { display: grid; gap: 4px; color: var(--muted); font-size: 11px; }
+select, button { font: inherit; color: var(--text); background: #17252c; border: 1px solid #3a505a; border-radius: 4px; }
+select { min-height: 34px; padding: 5px 28px 5px 8px; }
+button { min-height: 34px; padding: 5px 10px; cursor: pointer; }
+button:hover:not(:disabled), select:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled, select:disabled { opacity: .45; cursor: default; }
+button:focus-visible, select:focus-visible, svg:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.zoom-controls { display: flex; gap: 5px; margin-left: auto; }
+.legend { display: grid; grid-template-columns: minmax(150px, 270px) 1fr; gap: 12px; align-items: center; margin-bottom: 12px; color: var(--muted); font-size: 11px; }
+.ramp { height: 9px; border-radius: 2px; background: linear-gradient(90deg, #18333d, #1e5663, #1f8190, #62b7a8, #f2d06b); }
+.ramp-labels { display: flex; justify-content: space-between; margin-top: 2px; }
+#view-status { margin: 0 0 8px; color: #bed0d5; font-size: 12px; }
+#map { display: grid; gap: 4px; max-height: 62vh; overflow: auto; padding: 4px 2px 4px 0; }
+.shape-row { display: grid; grid-template-columns: 64px minmax(80px, 1fr) 188px; gap: 8px; align-items: center; min-height: 31px; }
+.partition-button { width: 100%; min-height: 26px; padding: 2px 6px; text-align: right; border: 0; background: transparent; color: #c8d7da; }
+.partition-button:hover { color: var(--hot); }
+.offset-bounds { color: var(--muted); text-align: right; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shape { display: block; width: 100%; height: 22px; background: #0d1519; border: 1px solid #26363e; border-radius: 2px; }
+.shape-row.focused .shape { height: 52px; border-color: var(--accent); }
+.empty { padding: 30px; text-align: center; color: var(--muted); border: 1px dashed var(--line); }
+.inspection { min-height: 152px; }
+.inspection.placeholder { display: grid; place-items: center; color: var(--muted); }
+.inspection h3 { color: var(--hot); margin-bottom: 10px; }
+.inspection dl { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 10px 18px; margin: 0; }
+.inspection dt { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.inspection dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.approx { color: var(--hot); }
+.table-wrap { overflow: auto; max-height: 52vh; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+th, td { padding: 8px 10px; border-bottom: 1px solid #26363e; text-align: right; }
+th { position: sticky; top: 0; z-index: 1; background: var(--panel); color: var(--muted); font-weight: 500; }
+th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+meter { width: 72px; height: 7px; margin-right: 7px; vertical-align: middle; accent-color: var(--accent); }
+.notes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; color: var(--muted); font-size: 12px; }
+.notes h3 { color: var(--text); margin-bottom: 5px; }
+footer { padding: 18px 0 40px; font-size: 11px; }
+@media (max-width: 1000px) {
+  .cards { grid-template-columns: repeat(3, 1fr); }
+  .inspection dl { grid-template-columns: repeat(3, 1fr); }
+  .shape-row { grid-template-columns: 54px minmax(80px, 1fr); }
+  .offset-bounds { grid-column: 2; text-align: left; }
+  .notes { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  header, main, footer { width: min(100% - 18px, 1500px); }
+  header { padding-top: 24px; }
+  section { padding: 13px; }
+  .cards { grid-template-columns: repeat(2, 1fr); }
+  .section-head, .legend { display: block; }
+  .zoom-controls { margin-left: 0; }
+  .inspection dl { grid-template-columns: repeat(2, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">kshape · observed stream report</div>
+  <h1>{{.Title}}</h1>
+  <p class="subtitle">{{if .Topic}}Topic identity: <code>{{.Topic}}</code>{{else}}Empty artifact; no topic identity was observed.{{end}} This report describes only records supplied to <code>kshape</code>.</p>
+</header>
+<main>
+  <section aria-labelledby="overview-heading">
+    <div class="section-head">
+      <h2 id="overview-heading">Overview</h2>
+      <p>Exact counters refer to the supplied stream. Offset occupancy is bounded by each partition’s first and last observed record.</p>
+    </div>
+    <div class="cards">
+      <div class="card"><span class="label">Partitions observed</span><span class="value">{{.Overview.PartitionCount}}</span></div>
+      <div class="card"><span class="label">Visible records</span><span class="value">{{.Overview.Records}}</span><span class="detail">exact supplied frames</span></div>
+      <div class="card" title="{{.Overview.PayloadExact}}"><span class="label">Logical payload</span><span class="value">{{.Overview.PayloadBytes}}</span><span class="detail">not broker storage</span></div>
+      <div class="card"><span class="label">Observed occupancy</span><span class="value">{{.Overview.Occupancy}}</span><span class="detail">records ÷ summed observed spans</span></div>
+      <div class="card"><span class="label">Observed tombstones</span><span class="value">{{.Overview.Tombstones}}</span><span class="detail">{{.Overview.TombstoneRatio}} of supplied records</span></div>
+      <div class="card"><span class="label">Approx. distinct keys</span><span class="value approx">{{.Overview.DistinctKeys}}</span><span class="detail">{{.Overview.RecordsPerKey}} keyed records / distinct key</span></div>
+    </div>
+    <div class="facts">
+      <span>Keyed records <strong>{{.Overview.KeyedRecords}}</strong></span>
+      <span>Null-key records <strong>{{.Overview.NullKeys}}</strong></span>
+      <span>Missing timestamps <strong>{{.Overview.MissingTimes}}</strong></span>
+      <span>Observed time <strong>{{.Overview.TimestampRange}}</strong></span>
+    </div>
+  </section>
+
+  <section aria-labelledby="shape-heading">
+    <div class="section-head">
+      <h2 id="shape-heading">Partition × offset-space shape</h2>
+      <p>Rows contain no claim about offsets before the first or after the last supplied record. Select a partition, then zoom to switch automatically to finer aligned summaries. Zoom stops at the artifact’s finest bucket width.</p>
+    </div>
+    <div class="controls">
+      <label>Metric
+        <select id="metric">
+          <option value="records">Visible records</option>
+          <option value="occupancy">Observed occupancy</option>
+          <option value="bytes">Logical payload bytes</option>
+          <option value="tombstones">Tombstone share</option>
+          <option value="distinct">Approx. distinct keys</option>
+          <option value="rewrite">Approx. records / distinct key</option>
+        </select>
+      </label>
+      <label>Offset alignment
+        <select id="alignment">
+          <option value="partition">Each partition’s observed span</option>
+          <option value="global">Shared observed offset axis</option>
+        </select>
+      </label>
+      <label>Intensity scale
+        <select id="scale">
+          <option value="partition">Within each partition</option>
+          <option value="global">Across visible partitions</option>
+        </select>
+      </label>
+      <div class="zoom-controls" aria-label="Map navigation">
+        <button id="all-partitions" type="button">All partitions</button>
+        <button id="zoom-out" type="button">Zoom out</button>
+        <button id="zoom-in" type="button">Zoom in</button>
+      </div>
+    </div>
+    <div class="legend">
+      <div><div class="ramp" aria-hidden="true"></div><div class="ramp-labels"><span>none</span><span>higher</span></div></div>
+      <span id="legend-text"></span>
+    </div>
+    <p id="view-status" aria-live="polite"></p>
+    <div id="map"><div class="empty">Preparing the offline report…</div></div>
+    <noscript><div class="empty">JavaScript is required for the interactive shape map. The overview and partition comparison remain available.</div></noscript>
+  </section>
+
+  <section aria-labelledby="inspection-heading">
+    <div class="section-head">
+      <h2 id="inspection-heading">Region inspection</h2>
+      <p><span class="approx">≈</span> marks HyperLogLog-derived values.</p>
+    </div>
+    <div id="inspection" class="inspection placeholder" aria-live="polite">Hover or click a colored offset region to inspect it.</div>
+  </section>
+
+  <section aria-labelledby="comparison-heading">
+    <div class="section-head">
+      <h2 id="comparison-heading">Partition comparison</h2>
+      <p>Bars are relative to the largest observed partition in this artifact; numbers retain their metric semantics.</p>
+    </div>
+    {{if .Partitions}}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Partition</th><th>Observed offsets</th><th>Visible records</th><th>Logical payload</th><th>Occupancy</th><th>Tombstones</th><th>Approx. distinct keys</th><th>Approx. records/key</th></tr></thead>
+        <tbody>
+        {{range .Partitions}}
+          <tr>
+            <td>p{{.ID}}</td><td>{{.Offsets}}</td>
+            <td><meter min="0" max="1" value="{{.RecordsBar}}">{{.RecordsBar}}</meter>{{.Records}}</td>
+            <td title="{{.PayloadExact}}"><meter min="0" max="1" value="{{.PayloadBar}}">{{.PayloadBar}}</meter>{{.PayloadBytes}}</td>
+            <td>{{.Occupancy}}</td><td>{{.Tombstones}}</td><td class="approx">{{.DistinctKeys}}</td><td class="approx">{{.RecordsPerKey}}</td>
+          </tr>
+        {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{else}}<div class="empty">No partitions were observed.</div>{{end}}
+  </section>
+
+  <section class="notes" aria-label="Metric notes">
+    <div><h3>Observed, not authoritative</h3>Gaps and occupancy describe the supplied first-to-last offset span. They do not reveal broker watermarks, retention causes, compaction causes, or records outside the stream.</div>
+    <div><h3>Logical bytes</h3>Payload bytes sum non-tombstone formatter lengths. They exclude Kafka record overhead, compression, indexes, replicas, and broker disk usage.</div>
+    <div><h3>Approximate keys</h3>Distinct non-null keys and records-per-key use mergeable HyperLogLog summaries (theoretical relative error {{.HLLRelativeError}}). Null keys are separate.</div>
+  </section>
+</main>
+<footer>Self-contained offline report · artifact bucket width {{.ArtifactBucketWidth}} offsets · kshape artifact v2</footer>
+
+<script id="kshape-data" type="application/json">{{.Data}}</script>
+<script>
+(() => {
+  "use strict";
+  const data = JSON.parse(document.getElementById("kshape-data").textContent);
+  const map = document.getElementById("map");
+  const metric = document.getElementById("metric");
+  const alignment = document.getElementById("alignment");
+  const scale = document.getElementById("scale");
+  const allButton = document.getElementById("all-partitions");
+  const zoomIn = document.getElementById("zoom-in");
+  const zoomOut = document.getElementById("zoom-out");
+  const legend = document.getElementById("legend-text");
+  const status = document.getElementById("view-status");
+  const inspection = document.getElementById("inspection");
+  const svgNS = "http://www.w3.org/2000/svg";
+  const palette = ["#18333d", "#1e5663", "#1f8190", "#62b7a8", "#f2d06b"];
+  const metricInfo = {
+    records: ["Visible records", "Exact supplied records per aligned region; square-root intensity."],
+    occupancy: ["Observed occupancy", "Exact records ÷ the first-to-last observed offset span inside each region."],
+    bytes: ["Logical payload bytes", "Exact logical payload bytes per region; square-root intensity, not broker storage."],
+    tombstones: ["Tombstone share", "Exact supplied tombstones ÷ supplied records in each region."],
+    distinct: ["Approx. distinct keys", "Approximate distinct non-null keys per region; square-root intensity."],
+    rewrite: ["Approx. records / distinct key", "Keyed records ÷ approximate distinct keys in each region."]
+  };
+  const state = { selected: null, range: null, anchor: null };
+  metric.value = data.initialMetric;
+
+  const B = value => BigInt(value);
+  const N = value => Number(value);
+  const fmtInt = value => B(value).toLocaleString("en-US");
+  const fmtFloat = (value, digits = 2) => Number(value).toLocaleString("en-US", { maximumFractionDigits: digits });
+  const fmtPercent = value => `${fmtFloat(value * 100)}%`;
+  const fmtBytes = value => {
+    const amount = N(value);
+    const units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"];
+    let scaled = amount, unit = 0;
+    while (scaled >= 1024 && unit < units.length - 1) { scaled /= 1024; unit++; }
+    return `${fmtFloat(scaled, 1)} ${units[unit]} (${fmtInt(value)} bytes)`;
+  };
+  const fmtTime = value => {
+    if (value == null) return "missing";
+    const number = N(value), date = new Date(number);
+    return Number.isFinite(number) && !Number.isNaN(date.valueOf())
+      ? `${date.toISOString()} (${fmtInt(value)} ms)` : `${fmtInt(value)} ms`;
+  };
+  const partitionByID = id => data.partitions.find(partition => partition.id === id);
+  const minimumViewSize = partition => {
+    const full = B(partition.last) - B(partition.first) + 1n;
+    const finest = B(partition.levels[0].width);
+    return finest < full ? finest : full;
+  };
+
+  function metricValue(region) {
+    switch (metric.value) {
+      case "records": return N(region.records);
+      case "occupancy": return region.occupancy;
+      case "bytes": return N(region.payloadBytes);
+      case "tombstones": return N(region.tombstones) / N(region.records);
+      case "distinct": return N(region.approxDistinctKeys);
+      case "rewrite": return region.approxRecordsPerKey;
+      default: return 0;
+    }
+  }
+
+  function bounds(partition) {
+    if (state.selected === partition.id && state.range) return state.range;
+    if (alignment.value === "global") return [B(data.firstOffset), B(data.lastOffset)];
+    return [B(partition.first), B(partition.last)];
+  }
+
+  function levelFor(partition, start, end) {
+    const desired = (end - start + 1n + 239n) / 240n;
+    let chosen = partition.levels[0];
+    for (const level of partition.levels) {
+      if (B(level.width) <= desired) chosen = level;
+    }
+    return chosen;
+  }
+
+  function visibleRegions(level, start, end) {
+    return level.regions.filter(region => B(region.end) >= start && B(region.start) <= end);
+  }
+
+  function position(value, start, end) {
+    return N(value - start) / N(end - start + 1n) * 1000;
+  }
+
+  function color(value, maximum) {
+    if (!(value > 0) || !(maximum > 0)) return "#111a20";
+    let ratio = Math.min(1, value / maximum);
+    if (["records", "bytes", "distinct"].includes(metric.value)) ratio = Math.sqrt(ratio);
+    return palette[Math.min(palette.length - 1, Math.ceil(ratio * palette.length) - 1)];
+  }
+
+  function svgElement(name, attributes = {}) {
+    const element = document.createElementNS(svgNS, name);
+    for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value);
+    return element;
+  }
+
+  function render() {
+    if (!data.partitions.length) {
+      map.innerHTML = '<div class="empty">No partitions were observed.</div>';
+      status.textContent = "Empty artifact";
+      updateControls();
+      return;
+    }
+    const shown = state.selected == null ? data.partitions : [partitionByID(state.selected)];
+    const rows = shown.map(partition => {
+      const [start, end] = bounds(partition);
+      const level = levelFor(partition, start, end);
+      return { partition, start, end, level, regions: visibleRegions(level, start, end) };
+    });
+    const fixedScale = metric.value === "occupancy" || metric.value === "tombstones";
+    let globalMaximum = fixedScale ? 1 : 0;
+    if (!fixedScale && scale.value === "global") {
+      for (const row of rows) for (const region of row.regions) globalMaximum = Math.max(globalMaximum, metricValue(region));
+    }
+    map.replaceChildren();
+    for (const row of rows) drawRow(row, globalMaximum, fixedScale);
+    const selected = state.selected == null ? null : partitionByID(state.selected);
+    if (selected) {
+      const [start, end] = state.range;
+      status.textContent = `Focused p${selected.id} · offsets ${fmtInt(start)}–${fmtInt(end)} · ${fmtInt(end - start + 1n)} offsets visible`;
+    } else {
+      status.textContent = alignment.value === "global"
+        ? `All ${data.partitions.length} partitions on shared offsets ${fmtInt(data.firstOffset)}–${fmtInt(data.lastOffset)}`
+        : `All ${data.partitions.length} partitions; each row spans its own first-to-last observed offset`;
+    }
+    legend.textContent = metricInfo[metric.value][1] + (fixedScale ? " Scale is fixed at 0–100%." : scale.value === "partition" ? " Each row uses its own maximum." : " All visible rows share one maximum.");
+    updateControls();
+  }
+
+  function drawRow(row, globalMaximum, fixedScale) {
+    const container = document.createElement("div");
+    container.className = "shape-row" + (state.selected === row.partition.id ? " focused" : "");
+    const label = document.createElement("button");
+    label.type = "button";
+    label.className = "partition-button";
+    label.textContent = `p${row.partition.id}`;
+    label.title = `Focus partition ${row.partition.id}`;
+    label.addEventListener("click", () => selectPartition(row.partition));
+    const svg = svgElement("svg", { class: "shape", viewBox: "0 0 1000 22", preserveAspectRatio: "none", tabindex: "0", role: "img", "aria-label": `Partition ${row.partition.id}, ${metricInfo[metric.value][0]}, offsets ${row.start} through ${row.end}` });
+    const defs = svgElement("defs");
+    const pattern = svgElement("pattern", { id: `unknown-${row.partition.id}`, width: "8", height: "8", patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" });
+    pattern.append(svgElement("line", { x1: "0", y1: "0", x2: "0", y2: "8", stroke: "#26363e", "stroke-width": "2" }));
+    defs.append(pattern);
+    svg.append(defs, svgElement("rect", { x: "0", y: "0", width: "1000", height: "22", fill: `url(#unknown-${row.partition.id})` }));
+    const knownStart = B(row.partition.first) > row.start ? B(row.partition.first) : row.start;
+    const knownEnd = B(row.partition.last) < row.end ? B(row.partition.last) : row.end;
+    if (knownStart <= knownEnd) {
+      svg.append(svgElement("rect", { x: position(knownStart, row.start, row.end), y: "0", width: Math.max(.5, position(knownEnd + 1n, row.start, row.end) - position(knownStart, row.start, row.end)), height: "22", fill: "#101b20" }));
+    }
+    let rowMaximum = fixedScale ? 1 : globalMaximum;
+    if (!fixedScale && scale.value === "partition") {
+      rowMaximum = row.regions.reduce((maximum, region) => Math.max(maximum, metricValue(region)), 0);
+    }
+    row.regions.forEach((region, index) => {
+      const start = [B(region.start), B(row.partition.first), row.start].reduce((a, b) => a > b ? a : b);
+      const end = [B(region.end), B(row.partition.last), row.end].reduce((a, b) => a < b ? a : b);
+      if (start > end) return;
+      const x = position(start, row.start, row.end);
+      const width = Math.max(.65, position(end + 1n, row.start, row.end) - x);
+      const rectangle = svgElement("rect", { x, y: "1", width, height: "20", fill: color(metricValue(region), rowMaximum), "data-index": index });
+      const title = svgElement("title");
+      title.textContent = `p${row.partition.id} · offsets ${region.start}–${region.end} · ${region.records} supplied records`;
+      rectangle.append(title);
+      svg.append(rectangle);
+    });
+    svg.addEventListener("pointermove", event => {
+      const target = event.target.closest && event.target.closest("rect[data-index]");
+      if (target) inspectRegion(row.partition, row.regions[Number(target.dataset.index)]);
+    });
+    svg.addEventListener("click", event => {
+      const target = event.target.closest && event.target.closest("rect[data-index]");
+      selectPartition(row.partition);
+      if (target) inspectRegion(row.partition, row.regions[Number(target.dataset.index)]);
+    });
+    svg.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectPartition(row.partition); }
+      if (event.key === "+" || event.key === "=") { event.preventDefault(); zoom(2n); }
+      if (event.key === "-") { event.preventDefault(); zoomOutward(); }
+      if (event.key === "Escape") { event.preventDefault(); showAll(); }
+    });
+    const boundsLabel = document.createElement("div");
+    boundsLabel.className = "offset-bounds";
+    boundsLabel.textContent = `${fmtInt(row.partition.first)} → ${fmtInt(row.partition.last)} · bucket ${fmtInt(row.level.width)}`;
+    boundsLabel.title = "Partition observed bounds and active aligned summary width";
+    container.append(label, svg, boundsLabel);
+    map.append(container);
+  }
+
+  function selectPartition(partition) {
+    if (state.selected !== partition.id) {
+      state.selected = partition.id;
+      state.range = [B(partition.first), B(partition.last)];
+      state.anchor = (state.range[0] + state.range[1]) / 2n;
+      render();
+    }
+  }
+
+  function showAll() {
+    state.selected = null;
+    state.range = null;
+    state.anchor = null;
+    render();
+  }
+
+  function zoom(divisor) {
+    if (state.selected == null) return;
+    const partition = partitionByID(state.selected);
+    const fullStart = B(partition.first), fullEnd = B(partition.last);
+    const [start, end] = state.range;
+    const size = end - start + 1n;
+    const minimum = minimumViewSize(partition);
+    if (size <= minimum) return;
+    const nextSize = size / divisor > minimum ? size / divisor : minimum;
+    const center = state.anchor == null ? (start + end) / 2n : state.anchor;
+    let nextStart = center - nextSize / 2n;
+    let nextEnd = nextStart + nextSize - 1n;
+    if (nextStart < fullStart) { nextStart = fullStart; nextEnd = nextStart + nextSize - 1n; }
+    if (nextEnd > fullEnd) { nextEnd = fullEnd; nextStart = nextEnd - nextSize + 1n; }
+    state.range = [nextStart, nextEnd];
+    render();
+  }
+
+  function zoomOutward() {
+    if (state.selected == null) return;
+    const partition = partitionByID(state.selected);
+    const fullStart = B(partition.first), fullEnd = B(partition.last);
+    const [start, end] = state.range;
+    const fullSize = fullEnd - fullStart + 1n;
+    if (end - start + 1n >= fullSize) return;
+    const nextSize = (end - start + 1n) * 2n > fullSize ? fullSize : (end - start + 1n) * 2n;
+    const center = state.anchor == null ? (start + end) / 2n : state.anchor;
+    let nextStart = center - nextSize / 2n;
+    let nextEnd = nextStart + nextSize - 1n;
+    if (nextStart < fullStart) { nextStart = fullStart; nextEnd = nextStart + nextSize - 1n; }
+    if (nextEnd > fullEnd) { nextEnd = fullEnd; nextStart = nextEnd - nextSize + 1n; }
+    state.range = [nextStart, nextEnd];
+    render();
+  }
+
+  function updateControls() {
+    const fixedScale = metric.value === "occupancy" || metric.value === "tombstones";
+    scale.disabled = fixedScale;
+    allButton.disabled = state.selected == null;
+    if (state.selected == null) {
+      zoomIn.disabled = true;
+      zoomOut.disabled = true;
+    } else {
+      const partition = partitionByID(state.selected);
+      zoomIn.disabled = state.range[1] - state.range[0] + 1n <= minimumViewSize(partition);
+      zoomOut.disabled = state.range[0] === B(partition.first) && state.range[1] === B(partition.last);
+    }
+  }
+
+  function inspectRegion(partition, region) {
+    state.anchor = (B(region.first) + B(region.last)) / 2n;
+    const tombstoneShare = N(region.tombstones) / N(region.records);
+    inspection.className = "inspection";
+    inspection.innerHTML = `
+      <h3>p${partition.id} · aligned region ${fmtInt(region.start)}–${fmtInt(region.end)}</h3>
+      <dl>
+        <div><dt>Observed offsets</dt><dd>${fmtInt(region.first)}–${fmtInt(region.last)}</dd></div>
+        <div><dt>Visible records</dt><dd>${fmtInt(region.records)}</dd></div>
+        <div><dt>Observed occupancy</dt><dd>${fmtPercent(region.occupancy)} (${fmtInt(region.records)} / ${fmtInt(region.span)})</dd></div>
+        <div><dt>Logical payload</dt><dd>${fmtBytes(region.payloadBytes)}</dd></div>
+        <div><dt>Observed tombstones</dt><dd>${fmtInt(region.tombstones)} (${fmtPercent(tombstoneShare)})</dd></div>
+        <div><dt>Keys</dt><dd>${fmtInt(region.keyedRecords)} keyed · ${fmtInt(region.nullKeys)} null</dd></div>
+        <div><dt>Approx. distinct keys</dt><dd class="approx">≈${fmtInt(region.approxDistinctKeys)}</dd></div>
+        <div><dt>Approx. records / key</dt><dd class="approx">${region.approxRecordsPerKey ? `≈${fmtFloat(region.approxRecordsPerKey, 3)}×` : "—"}</dd></div>
+        <div><dt>Timestamp range</dt><dd>${region.minTimestamp == null ? "missing" : `${fmtTime(region.minTimestamp)} – ${fmtTime(region.maxTimestamp)}`}</dd></div>
+        <div><dt>Missing timestamps</dt><dd>${fmtInt(region.missingTimestamps)}</dd></div>
+      </dl>`;
+  }
+
+  metric.addEventListener("change", render);
+  alignment.addEventListener("change", render);
+  scale.addEventListener("change", render);
+  allButton.addEventListener("click", showAll);
+  zoomIn.addEventListener("click", () => zoom(2n));
+  zoomOut.addEventListener("click", zoomOutward);
+  render();
+})();
+</script>
+</body>
+</html>

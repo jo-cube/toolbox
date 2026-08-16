@@ -8,15 +8,32 @@ const (
 )
 
 func Hash64(data []byte, seed uint64) uint64 {
-	h := fnvOffset64 ^ seed
+	h := NewHasher64(seed)
+	h.Write(data)
+	return h.Sum64()
+}
+
+type Hasher64 struct {
+	value uint64
+}
+
+func NewHasher64(seed uint64) Hasher64 {
+	return Hasher64{value: fnvOffset64 ^ seed}
+}
+
+func (h *Hasher64) Write(data []byte) {
 	for _, b := range data {
-		h ^= uint64(b)
-		h *= fnvPrime64
+		h.value ^= uint64(b)
+		h.value *= fnvPrime64
 	}
-	h ^= h >> 33
-	h *= 0xff51afd7ed558ccd
-	h ^= h >> 33
-	h *= 0xc4ceb9fe1a85ec53
-	h ^= h >> 33
-	return h
+}
+
+func (h Hasher64) Sum64() uint64 {
+	x := h.value
+	x ^= x >> 33
+	x *= 0xff51afd7ed558ccd
+	x ^= x >> 33
+	x *= 0xc4ceb9fe1a85ec53
+	x ^= x >> 33
+	return x
 }

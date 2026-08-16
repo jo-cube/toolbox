@@ -48,6 +48,9 @@ func eachReader(name string, r io.Reader, opts InputOptions, fn func([]byte) err
 		if len(item) > 0 {
 			if item[len(item)-1] == delim {
 				item = item[:len(item)-1]
+				if !opts.NUL && len(item) > 0 && item[len(item)-1] == '\r' {
+					item = item[:len(item)-1]
+				}
 			}
 			if opts.Trim {
 				item = bytes.TrimSpace(item)

@@ -16,5 +16,7 @@ expect_status 2 "ksetoff rejects bad offset" \
 	ksetoff -F /tmp/ksetoff-local.conf -group g -topic t -offset wat -dry-run
 expect_status 2 "ksetoff rejects bad partition list" \
 	ksetoff -F /tmp/ksetoff-local.conf -group g -topic t -offset latest -partitions a -dry-run
+expect_status 2 "ksetoff rejects empty partition entries" \
+	ksetoff -F /tmp/ksetoff-local.conf -group g -topic t -offset latest -partitions , -dry-run
 
 pass "ksetoff local validation"

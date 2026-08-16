@@ -2,6 +2,7 @@ package sample
 
 import (
 	"bytes"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -94,6 +95,12 @@ func TestValidateRejectsAmbiguousMode(t *testing.T) {
 	if err := Validate(Config{Rate: 0.1, Count: 10}); err == nil {
 		t.Fatal("Validate() accepted rate and count together")
 	}
+	if err := Validate(Config{Rate: 0.1, RateSet: true, CountSet: true}); err == nil {
+		t.Fatal("Validate() accepted explicitly set rate and zero count together")
+	}
+	if err := Validate(Config{Count: -1, CountSet: true}); err == nil || !strings.Contains(err.Error(), "positive") {
+		t.Fatalf("Validate() error = %v, want positive count error", err)
+	}
 }
 
 func TestValidateRejectsNaNRate(t *testing.T) {
@@ -101,6 +108,42 @@ func TestValidateRejectsNaNRate(t *testing.T) {
 
 	if err := Validate(Config{Rate: math.NaN(), RateSet: true}); err == nil {
 		t.Fatal("Validate() accepted NaN rate")
+	}
+}
+
+func TestReservoirDoesNotPreallocateUnseenRecords(t *testing.T) {
+	t.Parallel()
+
+	path := writeInput(t, twoRecords)
+	var out bytes.Buffer
+	if err := Run([]string{path}, Config{Count: int(^uint(0) >> 1), Seed: 1}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != twoRecords {
+		t.Fatalf("Run() wrote %q, want %q", out.String(), twoRecords)
+	}
+}
+
+func TestStableSampleTreatsLFAndCRLFAsTheSameRecords(t *testing.T) {
+	t.Parallel()
+
+	var input strings.Builder
+	for i := range 100 {
+		fmt.Fprintln(&input, i)
+	}
+	lf := writeInput(t, input.String())
+	crlf := writeInput(t, strings.ReplaceAll(input.String(), "\n", "\r\n"))
+	cfg := Config{Rate: 0.5, Stable: true, Seed: 7}
+
+	var lfOut, crlfOut bytes.Buffer
+	if err := Run([]string{lf}, cfg, &lfOut); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run([]string{crlf}, cfg, &crlfOut); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.ReplaceAll(crlfOut.String(), "\r\n", "\n"); got != lfOut.String() {
+		t.Fatal("stable selection changed between LF and CRLF input")
 	}
 }
 

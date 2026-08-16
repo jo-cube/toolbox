@@ -30,6 +30,7 @@ cmd/                  CLI entrypoints and flag/output handling
 internal/buildinfo/   build-time version string
 internal/hello/       minimal reference CLI behavior
 internal/ksetoff/     Kafka config parsing, offset planning, and commits
+internal/kshape/      observed Kafka stream summaries and state files
 internal/rdbsh/       RocksDB shell behavior
 internal/prob/        shared stream input and stable hashing helpers
 internal/hll/         HyperLogLog implementation and state files
@@ -64,6 +65,7 @@ Install from source:
 ```sh
 make install-hello
 make install-ksetoff
+make install-kshape
 make install-rdbsh
 make install-hll
 make install-bf
@@ -81,7 +83,7 @@ gofmt -l .
 sh -n scripts/install.sh scripts/smoke-local.sh
 for f in $(find scripts/release-test -type f -name '*.sh' | sort); do sh -n "$f"; done
 go test ./internal/hello ./internal/ksetoff ./cmd/hello ./cmd/ksetoff
-go test ./internal/prob ./internal/hll ./internal/bf ./internal/card ./internal/heavy ./internal/sample ./cmd/hll ./cmd/bf ./cmd/card ./cmd/heavy ./cmd/sample
+go test ./internal/prob ./internal/hll ./internal/kshape ./internal/bf ./internal/card ./internal/heavy ./internal/sample ./cmd/kshape ./cmd/hll ./cmd/bf ./cmd/card ./cmd/heavy ./cmd/sample
 ```
 
 The full suite is:
@@ -109,6 +111,16 @@ It checks version aliases, help output, representative exit statuses, and the `h
 - plans offsets before committing them
 - treats `-dry-run` as the safe default workflow for humans
 
+`kshape`:
+
+- reads only the fixed formatter expression printed by `kshape format`
+- summarizes one observed topic in power-of-two offset buckets
+- stores exact counters and one mergeable HLL sketch per non-empty bucket
+- retains disjoint merge-guard spans so overlap checks stay order-independent
+- rejects duplicate or decreasing offsets within a partition
+- protects version 2 artifacts with a CRC32C checksum
+- renders a self-contained HTML report from adaptive, aligned summary levels
+
 `rdbsh`:
 
 - keeps the CGo surface narrow in `internal/rdbsh/rocksdb`
@@ -126,6 +138,7 @@ Compatibility constants are the source of truth:
 - `internal/prob.HashName`
 - `internal/hll.Magic`, `internal/hll.Version`
 - `internal/bf.Magic`, `internal/bf.Version`
+- `internal/kshape.Magic`, `internal/kshape.Version`, `internal/kshape.CanonicalFormat`
 
 Changing any of these can make old state files unreadable. Treat such changes as explicit file-format migrations.
 
