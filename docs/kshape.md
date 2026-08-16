@@ -124,7 +124,9 @@ Select a partition and use the zoom controls to inspect a smaller offset
 range. The report automatically switches among aligned power-of-two summary
 levels. It embeds the finest level, an adaptive whole-view level of roughly 240
 regions across the widest partition, and a midpoint level when those differ.
-HLL sketches are merged while rendering and are not copied into the HTML.
+Zoom stops at the artifact's finest bucket width rather than implying
+sub-bucket detail. HLL sketches are merged while rendering and are not copied
+into the HTML.
 
 The selectable map metrics are:
 
