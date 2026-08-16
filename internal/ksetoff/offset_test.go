@@ -67,7 +67,8 @@ func TestParsePartitions(t *testing.T) {
 		{name: "empty means all", raw: "", want: nil},
 		{name: "single", raw: "2", want: []int32{2}},
 		{name: "multiple sorted deduped", raw: "3,1,3,2", want: []int32{1, 2, 3}},
-		{name: "blank entries ignored", raw: "1, ,2", want: []int32{1, 2}},
+		{name: "blank entries rejected", raw: "1, ,2", wantErr: "empty entry"},
+		{name: "only blank entries rejected", raw: ",", wantErr: "empty entry"},
 		{name: "negative invalid", raw: "-1", wantErr: "invalid partition"},
 		{name: "non numeric invalid", raw: "abc", wantErr: "invalid partition"},
 	}

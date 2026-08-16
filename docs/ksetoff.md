@@ -109,7 +109,7 @@ Required flags:
 
 Optional flags:
 
-- `-partitions`: comma-separated partition numbers; defaults to all partitions
+- `-partitions`: comma-separated partition numbers; defaults to all partitions. Empty entries are rejected.
 - `-dry-run`: print the plan without committing offsets
 - `-timeout`: positive overall operation timeout; defaults to `30s`
 - `--version`, `-V`: print version information

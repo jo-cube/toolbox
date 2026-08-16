@@ -107,7 +107,7 @@ func ParsePartitions(raw string) ([]int32, error) {
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
-			continue
+			return nil, fmt.Errorf("invalid partition list %q: empty entry", raw)
 		}
 
 		numeric, err := strconv.ParseInt(part, 10, 32)
@@ -121,10 +121,6 @@ func ParsePartitions(raw string) ([]int32, error) {
 		}
 		seen[partition] = true
 		result = append(result, partition)
-	}
-
-	if len(result) == 0 {
-		return nil, nil
 	}
 
 	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
