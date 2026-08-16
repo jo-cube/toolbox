@@ -1,37 +1,48 @@
 package rdbsh
 
 import (
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func TestOpenExportFileRequiresForceToOverwrite(t *testing.T) {
+func TestWriteExportFileIsAtomicAndRequiresForce(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "dump.csv")
-	if err := os.WriteFile(path, []byte("existing"), 0o644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
+	write := func(content string, writeErr error) func(io.Writer) (int, error) {
+		return func(w io.Writer) (int, error) {
+			if _, err := io.WriteString(w, content); err != nil {
+				return 0, err
+			}
+			return 1, writeErr
+		}
 	}
 
-	if file, err := openExportFile(path, false); err == nil {
-		file.Close()
-		t.Fatal("openExportFile(force=false) succeeded for existing file, want error")
+	if _, err := writeExportFile(path, false, write("existing", nil)); err != nil {
+		t.Fatalf("writeExportFile(force=false) error = %v", err)
+	}
+	if _, err := writeExportFile(path, false, write("new", nil)); err == nil {
+		t.Fatal("writeExportFile(force=false) succeeded for existing file, want error")
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != "existing" {
+		t.Fatalf("failed export changed destination: content=%q error=%v", got, err)
 	}
 
-	file, err := openExportFile(path, true)
+	if _, err := writeExportFile(path, true, write("partial", errors.New("write failed"))); err == nil {
+		t.Fatal("writeExportFile() succeeded after writer error")
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != "existing" {
+		t.Fatalf("failed forced export changed destination: content=%q error=%v", got, err)
+	}
+
+	count, err := writeExportFile(path, true, write("replacement", nil))
 	if err != nil {
-		t.Fatalf("openExportFile(force=true) error = %v", err)
+		t.Fatalf("writeExportFile(force=true) error = %v", err)
 	}
-	if err := file.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
-
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("Stat() error = %v", err)
-	}
-	if info.Size() != 0 {
-		t.Fatalf("openExportFile(force=true) left size %d, want 0", info.Size())
+	if got, err := os.ReadFile(path); err != nil || count != 1 || string(got) != "replacement" {
+		t.Fatalf("successful export: count=%d content=%q error=%v", count, got, err)
 	}
 }
