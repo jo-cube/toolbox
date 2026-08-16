@@ -7,6 +7,9 @@ import (
 	"math"
 	"strings"
 	"testing"
+
+	"github.com/jo-cube/toolbox/internal/hll"
+	"github.com/jo-cube/toolbox/internal/prob"
 )
 
 func TestBuildProfilesBinaryKeysInterleavedPartitionsAndSparseOffsets(t *testing.T) {
@@ -38,9 +41,10 @@ func TestBuildProfilesBinaryKeysInterleavedPartitionsAndSparseOffsets(t *testing
 	}
 	first := p0.Regions[0]
 	if first.RegionFirstOffset != 0 || first.RegionLastOffset != 7 ||
-		first.VisibleRecords != 3 || first.LogicalPayloadBytes != 15 ||
-		first.VisibleTombstones != 1 || first.MissingTimestamps != 1 ||
-		first.ApproxDistinctKeys != 2 || first.ObservedOccupancy != 0.6 {
+		first.ObservedRecords != 3 || first.LogicalPayloadBytes != 15 ||
+		first.ObservedTombstones != 1 || first.KeyedRecords != 3 ||
+		first.MissingTimestamps != 1 || first.ApproxDistinctKeys != 2 ||
+		first.ApproxRecordsPerKey != 1.5 || first.ObservedOccupancy != 0.6 {
 		t.Fatalf("first region = %#v", first)
 	}
 	if got := report.Partitions[1].Regions[0]; got.NullKeys != 1 || got.ApproxDistinctKeys != 0 {
@@ -52,11 +56,28 @@ func TestBuildProfilesBinaryKeysInterleavedPartitionsAndSparseOffsets(t *testing
 		t.Fatal(err)
 	}
 	got := whole.Partitions[0].Regions[0]
-	if got.VisibleRecords != 4 || got.LogicalPayloadBytes != 22 || got.ApproxDistinctKeys != 3 {
+	if got.ObservedRecords != 4 || got.LogicalPayloadBytes != 22 || got.ApproxDistinctKeys != 3 {
 		t.Fatalf("whole partition = %#v", got)
 	}
 	if got.MinTimestamp == nil || *got.MinTimestamp != 50 || *got.MaxTimestamp != 150 {
 		t.Fatalf("timestamp bounds = %v..%v", got.MinTimestamp, got.MaxTimestamp)
+	}
+}
+
+func TestBuildStreamsLargeBinaryKey(t *testing.T) {
+	t.Parallel()
+
+	key := bytes.Repeat([]byte{0, '\t', '\n', 0xff}, 20<<10)
+	summary, err := Build(bytes.NewReader(frame("events", 0, 0, 1, 1, key, false)), 4, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := summary.Report(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := report.Partitions[0].Regions[0]; got.ObservedRecords != 1 || got.ApproxDistinctKeys != 1 {
+		t.Fatalf("region = %#v", got)
 	}
 }
 
@@ -72,9 +93,13 @@ func TestBuildRejectsMalformedAndTruncatedFrames(t *testing.T) {
 		{"bad terminator", []byte("events\t0\t1\t2\t3\t1\taX"), "invalid record terminator"},
 		{"negative offset", frame("events", 0, -1, 2, 3, nil, true), "offset must be non-negative"},
 		{"bad payload length", []byte("events\t0\t1\t2\t-2\t-1\n"), "payload length must be -1"},
-		{"bad key length", []byte("events\t0\t1\t2\t3\t-2\t\n"), "key length must be -1"},
+		{"bad key length", []byte("events\t0\t1\t2\t3\t-2\t\n"), "key length must be -1 through"},
+		{"excessive key length", []byte("events\t0\t1\t2\t3\t2147483648\t\n"), "key length must be -1 through"},
 		{"overflow", []byte("events\t0\t9223372036854775808\t2\t3\t-1\n"), "integer overflow"},
+		{"invalid topic", frame("bad topic", 0, 1, 2, 3, nil, true), "invalid Kafka topic"},
 		{"topic change", joinFrames(frame("a", 0, 1, 2, 3, nil, true), frame("b", 0, 2, 3, 4, nil, true)), "differs from"},
+		{"duplicate offset", joinFrames(frame("events", 0, 1, 2, 3, nil, true), frame("events", 0, 1, 3, 4, nil, true)), "not greater than previous"},
+		{"out-of-order offset", joinFrames(frame("events", 0, 2, 2, 3, nil, true), frame("events", 0, 1, 3, 4, nil, true)), "not greater than previous"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -102,7 +127,7 @@ func TestReportAggregatesPowerOfTwoResolutions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := report.Partitions[0].Regions; len(got) != 2 || got[0].VisibleRecords != 2 || got[1].VisibleRecords != 1 {
+	if got := report.Partitions[0].Regions; len(got) != 2 || got[0].ObservedRecords != 2 || got[1].ObservedRecords != 1 {
 		t.Fatalf("regions = %#v", got)
 	}
 	for _, width := range []uint64{2, 12} {
@@ -144,23 +169,61 @@ func TestArtifactIsDeterministicAndRejectsCorruption(t *testing.T) {
 
 	badMagic := append([]byte(nil), dataA...)
 	copy(badMagic, "NOPE")
-	invalidCounters := append([]byte(nil), dataA...)
-	// Header (26 bytes), partition header (8), bucket/bounds (24), then record count.
-	binary.BigEndian.PutUint64(invalidCounters[58:66], 0)
+	badVersion := append([]byte(nil), dataA...)
+	badVersion[4] = 99
+	badHash := append([]byte(nil), dataA...)
+	badHash[bytes.Index(badHash, []byte(prob.HashName))] ^= 1
+	badChecksum := append([]byte(nil), dataA...)
+	badChecksum[len(badChecksum)-5] ^= 1
 	tests := []struct {
 		name string
 		data []byte
 		want string
 	}{
 		{"bad magic", badMagic, "invalid kshape file magic"},
+		{"bad version", badVersion, "unsupported kshape version 99"},
+		{"bad hash", badHash, "unsupported hash"},
 		{"truncated", dataA[:len(dataA)-1], "unexpected EOF"},
 		{"trailing", append(append([]byte(nil), dataA...), 0), "unexpected trailing data"},
-		{"invalid counters", invalidCounters, "invalid counters"},
+		{"checksum", badChecksum, "checksum mismatch"},
 	}
 	for _, tt := range tests {
 		if _, err := Read(bytes.NewReader(tt.data)); err == nil || !strings.Contains(err.Error(), tt.want) {
 			t.Errorf("Read(%s) error = %v, want %q", tt.name, err, tt.want)
 		}
+	}
+
+	invalid := mustBuild(t, "events", 4, 8, 1)
+	invalid.Partitions[0].Regions[0].Records = 2
+	if err := Write(&bytes.Buffer{}, invalid); err == nil || !strings.Contains(err.Error(), "invalid counters") {
+		t.Fatalf("Write(invalid) error = %v", err)
+	}
+}
+
+func TestArtifactRejectsExcessiveDeclaredSketchDataBeforeAllocation(t *testing.T) {
+	t.Parallel()
+
+	var artifact bytes.Buffer
+	artifact.WriteString(Magic)
+	for _, field := range []any{Version, uint64(1), uint8(20), hll.Version} {
+		if err := binary.Write(&artifact, binary.BigEndian, field); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writeString(&artifact, prob.HashName); err != nil {
+		t.Fatal(err)
+	}
+	if err := binary.Write(&artifact, binary.BigEndian, uint16(len("events"))); err != nil {
+		t.Fatal(err)
+	}
+	artifact.WriteString("events")
+	for _, field := range []any{uint32(1), int32(0), uint32(maxSketchBytes/(1<<20) + 1)} {
+		if err := binary.Write(&artifact, binary.BigEndian, field); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := Read(bytes.NewReader(artifact.Bytes())); err == nil || !strings.Contains(err.Error(), "HLL register data exceeds") {
+		t.Fatalf("Read() error = %v", err)
 	}
 }
 
@@ -176,14 +239,43 @@ func TestMergeCombinesDisjointScansAndRejectsInvalidMerges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := report.Partitions[0].Regions[0].VisibleRecords; got != 4 {
-		t.Fatalf("visible records = %d, want 4", got)
+	if got := report.Partitions[0].Regions[0].ObservedRecords; got != 4 {
+		t.Fatalf("observed records = %d, want 4", got)
+	}
+
+	fragments := mustBuild(t, "events", 8, 8, 0, 1)
+	if err := fragments.Merge(mustBuild(t, "events", 8, 8, 4, 5)); err != nil {
+		t.Fatal(err)
+	}
+	fragments, err = Read(bytes.NewReader(writeArtifact(t, fragments)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fragments.Merge(mustBuild(t, "events", 8, 8, 2, 3)); err != nil {
+		t.Fatalf("merge of disjoint middle fragment depends on input order: %v", err)
+	}
+	if got := fragments.Partitions[0].Regions[0].Coverage; len(got) != 1 || got[0] != (OffsetSpan{0, 5}) {
+		t.Fatalf("merged coverage = %#v", got)
+	}
+	otherOrder := mustBuild(t, "events", 8, 8, 2, 3)
+	if err := otherOrder.Merge(mustBuild(t, "events", 8, 8, 4, 5)); err != nil {
+		t.Fatal(err)
+	}
+	if err := otherOrder.Merge(mustBuild(t, "events", 8, 8, 0, 1)); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(writeArtifact(t, fragments), writeArtifact(t, otherOrder)) {
+		t.Fatal("artifact serialization depends on merge order")
 	}
 
 	overlapA := mustBuild(t, "events", 8, 8, 0, 3)
 	overlapB := mustBuild(t, "events", 8, 8, 1, 2)
 	if err := overlapA.Merge(overlapB); err == nil || !strings.Contains(err.Error(), "overlapping") {
 		t.Fatalf("overlap error = %v", err)
+	}
+	identical := mustBuild(t, "events", 8, 8, 0, 3)
+	if err := identical.Merge(mustBuild(t, "events", 8, 8, 0, 3)); err == nil || !strings.Contains(err.Error(), "overlapping") {
+		t.Fatalf("identical artifact error = %v", err)
 	}
 	for name, other := range map[string]*Summary{
 		"topic":     mustBuild(t, "other", 8, 8, 4),
@@ -200,7 +292,7 @@ func TestMergeCombinesDisjointScansAndRejectsInvalidMerges(t *testing.T) {
 func TestEmptyAndMaximumOffsetArtifacts(t *testing.T) {
 	t.Parallel()
 
-	empty, err := Build(bytes.NewReader(nil), 0, 0)
+	empty, err := Build(bytes.NewReader(nil), DefaultBucketWidth, DefaultPrecision)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,6 +311,14 @@ func TestEmptyAndMaximumOffsetArtifacts(t *testing.T) {
 	if _, err := Read(bytes.NewReader(writeArtifact(t, maximum))); err != nil {
 		t.Fatal(err)
 	}
+	maximumWidth, err := Build(bytes.NewReader(frame("events", 0, math.MaxInt64, -1, 0, nil, false)), 1<<63, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	maximumReport, err := maximumWidth.Report(1 << 63)
+	if err != nil || maximumReport.Partitions[0].Regions[0].RegionLastOffset != math.MaxInt64 {
+		t.Fatalf("maximum-width report = %#v, %v", maximumReport, err)
+	}
 }
 
 func TestAddRejectsPayloadCounterOverflow(t *testing.T) {
@@ -228,16 +328,28 @@ func TestAddRejectsPayloadCounterOverflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	record := Record{Topic: "events", PayloadLength: math.MaxInt64, NullKey: true}
+	record := Record{Topic: "events", Offset: 0, PayloadLength: math.MaxInt64, NullKey: true}
 	if err := summary.Add(record); err != nil {
 		t.Fatal(err)
 	}
+	record.Offset = 1
 	if err := summary.Add(record); err != nil {
 		t.Fatal(err)
 	}
+	record.Offset = 2
 	record.PayloadLength = 2
 	if err := summary.Add(record); err == nil || !strings.Contains(err.Error(), "overflow") {
 		t.Fatalf("Add() error = %v, want overflow", err)
+	}
+}
+
+func TestNewRequiresExplicitValidConfiguration(t *testing.T) {
+	t.Parallel()
+
+	for _, config := range [][2]uint64{{0, 8}, {8, 0}, {3, 8}} {
+		if _, err := New(config[0], uint8(config[1])); err == nil {
+			t.Fatalf("New(%d, %d) succeeded", config[0], config[1])
+		}
 	}
 }
 

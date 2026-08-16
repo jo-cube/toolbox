@@ -22,7 +22,14 @@ type Summary struct {
 }
 
 type Partition struct {
-	Regions map[uint64]*Region
+	Regions    map[uint64]*Region
+	lastOffset int64
+	hasOffset  bool
+}
+
+type OffsetSpan struct {
+	FirstOffset int64
+	LastOffset  int64
 }
 
 type Region struct {
@@ -36,6 +43,7 @@ type Region struct {
 	MissingTimestamps uint64
 	MinTimestamp      int64
 	MaxTimestamp      int64
+	Coverage          []OffsetSpan
 	Keys              *hll.Sketch
 }
 
@@ -46,7 +54,9 @@ type Report struct {
 	ArtifactBucketWidth uint64            `json:"artifact_bucket_width"`
 	ReportBucketWidth   uint64            `json:"report_bucket_width"`
 	HLLPrecision        uint8             `json:"hll_precision"`
+	HLLVersion          uint8             `json:"hll_version"`
 	Hash                string            `json:"hash"`
+	Checksum            string            `json:"checksum"`
 	HLLRelativeError    float64           `json:"hll_relative_error"`
 	Partitions          []PartitionReport `json:"partitions"`
 }
@@ -57,30 +67,25 @@ type PartitionReport struct {
 }
 
 type RegionReport struct {
-	RegionFirstOffset          uint64  `json:"region_first_offset"`
-	RegionLastOffset           uint64  `json:"region_last_offset"`
-	ObservedFirstOffset        int64   `json:"observed_first_offset"`
-	ObservedLastOffset         int64   `json:"observed_last_offset"`
-	ObservedSpan               uint64  `json:"observed_span"`
-	VisibleRecords             uint64  `json:"visible_records"`
-	ObservedOccupancy          float64 `json:"observed_occupancy"`
-	LogicalPayloadBytes        uint64  `json:"logical_payload_bytes"`
-	VisibleTombstones          uint64  `json:"visible_tombstones"`
-	NullKeys                   uint64  `json:"null_keys"`
-	MissingTimestamps          uint64  `json:"missing_timestamps"`
-	MinTimestamp               *int64  `json:"min_timestamp"`
-	MaxTimestamp               *int64  `json:"max_timestamp"`
-	ApproxDistinctKeys         uint64  `json:"approx_distinct_keys"`
-	ApproxVisibleRewriteFactor float64 `json:"approx_visible_rewrite_factor"`
+	RegionFirstOffset   uint64  `json:"region_first_offset"`
+	RegionLastOffset    uint64  `json:"region_last_offset"`
+	ObservedFirstOffset int64   `json:"observed_first_offset"`
+	ObservedLastOffset  int64   `json:"observed_last_offset"`
+	ObservedSpan        uint64  `json:"observed_span"`
+	ObservedRecords     uint64  `json:"observed_records"`
+	ObservedOccupancy   float64 `json:"observed_occupancy"`
+	LogicalPayloadBytes uint64  `json:"logical_payload_bytes"`
+	ObservedTombstones  uint64  `json:"observed_tombstones"`
+	NullKeys            uint64  `json:"null_keys"`
+	KeyedRecords        uint64  `json:"keyed_records"`
+	MissingTimestamps   uint64  `json:"missing_timestamps"`
+	MinTimestamp        *int64  `json:"min_timestamp"`
+	MaxTimestamp        *int64  `json:"max_timestamp"`
+	ApproxDistinctKeys  uint64  `json:"approx_distinct_keys"`
+	ApproxRecordsPerKey float64 `json:"approx_keyed_records_per_distinct_key"`
 }
 
 func New(bucketWidth uint64, precision uint8) (*Summary, error) {
-	if bucketWidth == 0 {
-		bucketWidth = DefaultBucketWidth
-	}
-	if precision == 0 {
-		precision = DefaultPrecision
-	}
 	if err := validateConfig(bucketWidth, precision); err != nil {
 		return nil, err
 	}
@@ -92,10 +97,10 @@ func New(bucketWidth uint64, precision uint8) (*Summary, error) {
 }
 
 func (s *Summary) Add(record Record) error {
-	if record.Topic == "" {
-		return fmt.Errorf("topic cannot be empty")
-	}
 	if s.Topic == "" {
+		if err := validateTopic(record.Topic); err != nil {
+			return err
+		}
 		s.Topic = record.Topic
 	} else if s.Topic != record.Topic {
 		return fmt.Errorf("topic %q differs from %q", record.Topic, s.Topic)
@@ -108,6 +113,9 @@ func (s *Summary) Add(record Record) error {
 	}
 
 	partition := s.Partitions[record.Partition]
+	if partition != nil && partition.hasOffset && record.Offset <= partition.lastOffset {
+		return fmt.Errorf("partition %d offset %d is not greater than previous offset %d", record.Partition, record.Offset, partition.lastOffset)
+	}
 	if partition == nil {
 		partition = &Partition{Regions: make(map[uint64]*Region)}
 		s.Partitions[record.Partition] = partition
@@ -123,6 +131,7 @@ func (s *Summary) Add(record Record) error {
 			Bucket:      bucket,
 			FirstOffset: record.Offset,
 			LastOffset:  record.Offset,
+			Coverage:    []OffsetSpan{{FirstOffset: record.Offset, LastOffset: record.Offset}},
 			Keys:        keys,
 		}
 		partition.Regions[bucket] = region
@@ -155,10 +164,16 @@ func (s *Summary) Add(record Record) error {
 	}
 	region.FirstOffset = min(region.FirstOffset, record.Offset)
 	region.LastOffset = max(region.LastOffset, record.Offset)
+	region.Coverage[len(region.Coverage)-1].LastOffset = record.Offset
+	partition.lastOffset = record.Offset
+	partition.hasOffset = true
 	return nil
 }
 
 func (s *Summary) Merge(other *Summary) error {
+	if s == nil || other == nil {
+		return fmt.Errorf("cannot merge nil summary")
+	}
 	if s.BucketWidth != other.BucketWidth || s.Precision != other.Precision {
 		return fmt.Errorf("incompatible bucket width or HLL precision")
 	}
@@ -175,7 +190,7 @@ func (s *Summary) Merge(other *Summary) error {
 			if region == nil {
 				continue
 			}
-			if region.FirstOffset <= otherRegion.LastOffset && otherRegion.FirstOffset <= region.LastOffset {
+			if coverageOverlaps(region.Coverage, otherRegion.Coverage) {
 				return fmt.Errorf("partition %d bucket %d has overlapping observed offset spans", partitionID, bucket)
 			}
 			if err := canMerge(region, otherRegion); err != nil {
@@ -189,19 +204,21 @@ func (s *Summary) Merge(other *Summary) error {
 	for partitionID, otherPartition := range other.Partitions {
 		partition := s.Partitions[partitionID]
 		if partition == nil {
-			s.Partitions[partitionID] = otherPartition
+			s.Partitions[partitionID] = clonePartition(otherPartition)
 			continue
 		}
 		for bucket, otherRegion := range otherPartition.Regions {
 			region := partition.Regions[bucket]
 			if region == nil {
-				partition.Regions[bucket] = otherRegion
+				partition.Regions[bucket] = cloneRegion(otherRegion)
 				continue
 			}
 			if err := mergeRegion(region, otherRegion); err != nil {
 				return err
 			}
 		}
+		partition.lastOffset = max(partition.lastOffset, otherPartition.lastOffset)
+		partition.hasOffset = partition.hasOffset || otherPartition.hasOffset
 	}
 	return nil
 }
@@ -218,7 +235,9 @@ func (s *Summary) Report(bucketWidth uint64) (Report, error) {
 		ArtifactBucketWidth: s.BucketWidth,
 		ReportBucketWidth:   bucketWidth,
 		HLLPrecision:        s.Precision,
+		HLLVersion:          hll.Version,
 		Hash:                prob.HashName,
+		Checksum:            ChecksumName,
 		HLLRelativeError:    sketch.RelativeError(),
 		Partitions:          make([]PartitionReport, 0, len(s.Partitions)),
 	}
@@ -238,7 +257,7 @@ func (s *Summary) Report(bucketWidth uint64) (Report, error) {
 			}
 			if groups[group] == nil {
 				groups[group] = cloneRegion(region)
-			} else if err := mergeRegion(groups[group], region); err != nil {
+			} else if err := mergeMetrics(groups[group], region); err != nil {
 				return Report{}, err
 			}
 		}
@@ -255,27 +274,30 @@ func (s *Summary) Report(bucketWidth uint64) (Report, error) {
 				last = min(last, uint64(math.MaxInt64))
 			}
 			span := uint64(region.LastOffset-region.FirstOffset) + 1
+			keyedRecords := region.Records - region.NullKeys
+			distinctKeys := min(region.Keys.Estimate(), keyedRecords)
 			regionReport := RegionReport{
 				RegionFirstOffset:   first,
 				RegionLastOffset:    last,
 				ObservedFirstOffset: region.FirstOffset,
 				ObservedLastOffset:  region.LastOffset,
 				ObservedSpan:        span,
-				VisibleRecords:      region.Records,
+				ObservedRecords:     region.Records,
 				ObservedOccupancy:   float64(region.Records) / float64(span),
 				LogicalPayloadBytes: region.PayloadBytes,
-				VisibleTombstones:   region.Tombstones,
+				ObservedTombstones:  region.Tombstones,
 				NullKeys:            region.NullKeys,
+				KeyedRecords:        keyedRecords,
 				MissingTimestamps:   region.MissingTimestamps,
-				ApproxDistinctKeys:  region.Keys.Estimate(),
+				ApproxDistinctKeys:  distinctKeys,
 			}
 			if region.MissingTimestamps != region.Records {
 				minTimestamp, maxTimestamp := region.MinTimestamp, region.MaxTimestamp
 				regionReport.MinTimestamp = &minTimestamp
 				regionReport.MaxTimestamp = &maxTimestamp
 			}
-			if regionReport.ApproxDistinctKeys != 0 {
-				regionReport.ApproxVisibleRewriteFactor = float64(region.Records-region.NullKeys) / float64(regionReport.ApproxDistinctKeys)
+			if distinctKeys != 0 {
+				regionReport.ApproxRecordsPerKey = float64(keyedRecords) / float64(distinctKeys)
 			}
 			partitionReport.Regions = append(partitionReport.Regions, regionReport)
 		}
@@ -299,6 +321,10 @@ func powerOfTwo(value uint64) bool {
 }
 
 func canMerge(a, b *Region) error {
+	if a == nil || b == nil || a.Keys == nil || b.Keys == nil ||
+		a.Keys.Precision != b.Keys.Precision || len(a.Keys.Registers) != len(b.Keys.Registers) {
+		return fmt.Errorf("incompatible HLL sketches")
+	}
 	for _, pair := range [][2]uint64{
 		{a.Records, b.Records},
 		{a.PayloadBytes, b.PayloadBytes},
@@ -314,7 +340,19 @@ func canMerge(a, b *Region) error {
 }
 
 func mergeRegion(dst, src *Region) error {
+	coverage := mergeCoverage(dst.Coverage, src.Coverage)
+	if err := mergeMetrics(dst, src); err != nil {
+		return err
+	}
+	dst.Coverage = coverage
+	return nil
+}
+
+func mergeMetrics(dst, src *Region) error {
 	if err := canMerge(dst, src); err != nil {
+		return err
+	}
+	if err := dst.Keys.Merge(src.Keys); err != nil {
 		return err
 	}
 	dstKnown, srcKnown := dst.Records-dst.MissingTimestamps, src.Records-src.MissingTimestamps
@@ -331,14 +369,58 @@ func mergeRegion(dst, src *Region) error {
 		dst.MinTimestamp = min(dst.MinTimestamp, src.MinTimestamp)
 		dst.MaxTimestamp = max(dst.MaxTimestamp, src.MaxTimestamp)
 	}
-	return dst.Keys.Merge(src.Keys)
+	return nil
 }
 
 func cloneRegion(region *Region) *Region {
 	clone := *region
+	clone.Coverage = append([]OffsetSpan(nil), region.Coverage...)
 	clone.Keys, _ = hll.New(region.Keys.Precision)
 	_ = clone.Keys.Merge(region.Keys)
 	return &clone
+}
+
+func clonePartition(partition *Partition) *Partition {
+	clone := &Partition{
+		Regions:    make(map[uint64]*Region, len(partition.Regions)),
+		lastOffset: partition.lastOffset,
+		hasOffset:  partition.hasOffset,
+	}
+	for bucket, region := range partition.Regions {
+		clone.Regions[bucket] = cloneRegion(region)
+	}
+	return clone
+}
+
+func coverageOverlaps(a, b []OffsetSpan) bool {
+	for i, j := 0, 0; i < len(a) && j < len(b); {
+		if a[i].LastOffset < b[j].FirstOffset {
+			i++
+		} else if b[j].LastOffset < a[i].FirstOffset {
+			j++
+		} else {
+			return true
+		}
+	}
+	return false
+}
+
+func mergeCoverage(a, b []OffsetSpan) []OffsetSpan {
+	spans := make([]OffsetSpan, 0, len(a)+len(b))
+	for len(a) != 0 || len(b) != 0 {
+		var next OffsetSpan
+		if len(b) == 0 || len(a) != 0 && a[0].FirstOffset < b[0].FirstOffset {
+			next, a = a[0], a[1:]
+		} else {
+			next, b = b[0], b[1:]
+		}
+		if len(spans) != 0 && next.FirstOffset == spans[len(spans)-1].LastOffset+1 {
+			spans[len(spans)-1].LastOffset = next.LastOffset
+		} else {
+			spans = append(spans, next)
+		}
+	}
+	return spans
 }
 
 func sortedPartitions(partitions map[int32]*Partition) []int32 {
