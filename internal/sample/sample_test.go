@@ -5,6 +5,8 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -60,6 +62,29 @@ func TestRateZeroIsValidAndEmitsNothing(t *testing.T) {
 	}
 	if out.Len() != 0 {
 		t.Fatalf("Run() wrote %q, want no output", out.String())
+	}
+}
+
+func TestExplicitZeroSeedIsRepeatable(t *testing.T) {
+	t.Parallel()
+
+	var input strings.Builder
+	for i := range 100 {
+		input.WriteString(strconv.Itoa(i))
+		input.WriteByte('\n')
+	}
+	path := writeInput(t, input.String())
+	cfg := Config{Rate: 0.5, RateSet: true, SeedSet: true}
+
+	var a, b bytes.Buffer
+	if err := Run([]string{path}, cfg, &a); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run([]string{path}, cfg, &b); err != nil {
+		t.Fatal(err)
+	}
+	if a.String() != b.String() {
+		t.Fatal("explicit --seed 0 produced different samples")
 	}
 }
 

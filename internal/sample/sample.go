@@ -18,6 +18,7 @@ type Config struct {
 	Count   int
 	Stable  bool
 	Seed    int64
+	SeedSet bool
 }
 
 func Validate(cfg Config) error {
@@ -49,7 +50,7 @@ func Run(paths []string, cfg Config, out io.Writer) error {
 }
 
 func rateRandom(paths []string, cfg Config, out io.Writer) error {
-	rng := rand.New(rand.NewSource(seed(cfg.Seed)))
+	rng := rand.New(rand.NewSource(seed(cfg)))
 	return eachRaw(paths, func(record []byte) error {
 		if rng.Float64() < cfg.Rate {
 			_, err := out.Write(record)
@@ -75,20 +76,19 @@ func rateStable(paths []string, cfg Config, out io.Writer) error {
 }
 
 func reservoir(paths []string, cfg Config, out io.Writer) error {
-	rng := rand.New(rand.NewSource(seed(cfg.Seed)))
+	rng := rand.New(rand.NewSource(seed(cfg)))
 	items := make([][]byte, 0, cfg.Count)
 	var seen int64
 
 	if err := eachRaw(paths, func(record []byte) error {
 		seen++
-		copyRecord := append([]byte(nil), record...)
 		if len(items) < cfg.Count {
-			items = append(items, copyRecord)
+			items = append(items, append([]byte(nil), record...))
 			return nil
 		}
 		j := rng.Int63n(seen)
 		if j < int64(cfg.Count) {
-			items[j] = copyRecord
+			items[j] = append(items[j][:0], record...)
 		}
 		return nil
 	}); err != nil {
@@ -103,9 +103,9 @@ func reservoir(paths []string, cfg Config, out io.Writer) error {
 	return nil
 }
 
-func seed(value int64) int64 {
-	if value != 0 {
-		return value
+func seed(cfg Config) int64 {
+	if cfg.SeedSet || cfg.Seed != 0 {
+		return cfg.Seed
 	}
 	return time.Now().UnixNano()
 }
