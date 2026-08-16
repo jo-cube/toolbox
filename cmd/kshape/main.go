@@ -45,6 +45,8 @@ func run(args []string, in io.Reader, out, errOut io.Writer) int {
 		err = build(args[1:], in, out, errOut)
 	case "inspect":
 		err = inspect(args[1:], out, errOut)
+	case "render":
+		err = render(args[1:], out, errOut)
 	case "merge":
 		err = merge(args[1:], out, errOut)
 	default:
@@ -71,12 +73,13 @@ func run(args []string, in io.Reader, out, errOut io.Writer) int {
 func usage(out io.Writer) {
 	fmt.Fprint(out, `Usage: kshape <command> [options]
 
-Build and inspect mergeable summaries of observed Kafka record streams.
+Build, inspect, and render mergeable summaries of observed Kafka record streams.
 
 Commands:
   format   Print the canonical jkq/kcat -f expression.
   build    Read canonical records and write a binary .kshape artifact.
   inspect  Print an artifact at whole-partition or coarser bucket resolution.
+  render   Write a self-contained offline HTML report.
   merge    Merge compatible non-overlapping artifacts.
 
 Global options:
@@ -84,7 +87,7 @@ Global options:
 
 Example:
   jkq ... -f "$(kshape format)" | kshape build > topic.kshape
-  kshape inspect topic.kshape
+  kshape render topic.kshape > topic.html
 `)
 }
 
@@ -164,6 +167,36 @@ Options:
 		return json.NewEncoder(out).Encode(report)
 	}
 	return writeReport(out, report)
+}
+
+func render(args []string, out, errOut io.Writer) error {
+	fs := flag.NewFlagSet("kshape render", flag.ContinueOnError)
+	fs.SetOutput(errOut)
+	title := fs.String("title", "", "report title; defaults to the topic identity")
+	metric := fs.String("metric", "records", "initial metric: records, occupancy, bytes, tombstones, distinct, or rewrite")
+	fs.Usage = func() {
+		fmt.Fprint(fs.Output(), `Usage: kshape render [options] <file.kshape> > report.html
+
+Write a self-contained offline HTML report to stdout.
+
+Options:
+`)
+		fs.PrintDefaults()
+	}
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return usageError("usage: kshape render [options] <file>")
+	}
+	if !kshape.ValidRenderMetric(*metric) {
+		return usageError("render metric must be records, occupancy, bytes, tombstones, distinct, or rewrite")
+	}
+	summary, err := readSummary(fs.Arg(0))
+	if err != nil {
+		return err
+	}
+	return kshape.Render(out, summary, *title, *metric)
 }
 
 func merge(args []string, out, errOut io.Writer) error {

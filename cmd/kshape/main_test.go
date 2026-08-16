@@ -61,6 +61,17 @@ func TestFormatBuildInspectAndMergePipeline(t *testing.T) {
 			t.Errorf("inspect output %q does not contain %q", inspectOut.String(), want)
 		}
 	}
+
+	var renderOut bytes.Buffer
+	errOut.Reset()
+	if status := run([]string{"render", "--title", "events <shape>", "--metric", "rewrite", mergedPath}, nil, &renderOut, &errOut); status != 0 {
+		t.Fatalf("render status = %d, stderr = %s", status, errOut.String())
+	}
+	for _, want := range []string{"<!doctype html>", "events &lt;shape&gt;", `"initialMetric":"rewrite"`, "Partition × offset-space shape"} {
+		if !strings.Contains(renderOut.String(), want) {
+			t.Errorf("render output does not contain %q", want)
+		}
+	}
 }
 
 func TestRunExitStatuses(t *testing.T) {
@@ -75,6 +86,17 @@ func TestRunExitStatuses(t *testing.T) {
 	var out, errOut bytes.Buffer
 	if status := run([]string{"build"}, bytes.NewBufferString("bad"), &out, &errOut); status != 1 {
 		t.Fatalf("malformed build status = %d, want 1", status)
+	}
+	out.Reset()
+	errOut.Reset()
+	if status := run([]string{"render", "--metric", "unknown", "missing.kshape"}, nil, &out, &errOut); status != 2 {
+		t.Fatalf("invalid render metric status = %d, want 2", status)
+	}
+	badPath := writeFile(t, "bad.kshape", []byte("bad"))
+	out.Reset()
+	errOut.Reset()
+	if status := run([]string{"render", badPath}, nil, &out, &errOut); status != 1 || out.Len() != 0 {
+		t.Fatalf("corrupt render status = %d, stdout = %q, want status 1 and empty stdout", status, out.String())
 	}
 }
 
