@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -54,6 +55,7 @@ func ParseConfigFile(path string) (*KafkaConfig, error) {
 
 		switch key {
 		case "bootstrap.servers", "metadata.broker.list":
+			cfg.Brokers = cfg.Brokers[:0]
 			for _, broker := range strings.Split(value, ",") {
 				broker = strings.TrimSpace(broker)
 				if broker != "" {
@@ -77,7 +79,11 @@ func ParseConfigFile(path string) (*KafkaConfig, error) {
 		case "ssl.key.password":
 			cfg.SSLKeyPassword = value
 		case "enable.ssl.certificate.verification":
-			cfg.SSLVerify = strings.ToLower(value) != "false"
+			verify, err := strconv.ParseBool(value)
+			if err != nil {
+				return nil, fmt.Errorf("config file %s:%d: enable.ssl.certificate.verification must be a valid boolean", path, lineNo)
+			}
+			cfg.SSLVerify = verify
 		}
 	}
 

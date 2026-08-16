@@ -3,7 +3,7 @@ VERSION ?= dev
 BIN_DIR ?= $(CURDIR)/bin
 LOCAL_BIN ?= $(HOME)/.local/bin
 LDFLAGS := -s -w -X github.com/jo-cube/toolbox/internal/buildinfo.version=$(VERSION)
-ROCKSDB_PREFIX ?= $(shell if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists rocksdb; then pkg-config --variable=prefix rocksdb; elif command -v brew >/dev/null 2>&1 && brew --prefix rocksdb >/dev/null 2>&1; then brew --prefix rocksdb; fi)
+ROCKSDB_PREFIX ?= $(shell if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists rocksdb; then pkg-config --variable=prefix rocksdb; elif command -v brew >/dev/null 2>&1 && brew list --versions rocksdb >/dev/null 2>&1; then brew --prefix rocksdb; fi)
 ROCKSDB_CGO_CFLAGS ?= $(shell if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists rocksdb; then pkg-config --cflags rocksdb; elif [ -n "$(ROCKSDB_PREFIX)" ]; then printf '%s' '-I$(ROCKSDB_PREFIX)/include'; fi)
 ROCKSDB_CGO_LDFLAGS ?= $(shell if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists rocksdb; then pkg-config --libs rocksdb; elif [ -n "$(ROCKSDB_PREFIX)" ]; then printf '%s' '-L$(ROCKSDB_PREFIX)/lib -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd'; fi)
 RDBSH_ENV = CGO_ENABLED=1 CGO_CFLAGS='$(ROCKSDB_CGO_CFLAGS)' CGO_LDFLAGS='$(ROCKSDB_CGO_LDFLAGS)'
@@ -22,7 +22,7 @@ build:
 	$(GO) build -ldflags '$(LDFLAGS)' -o "$(BIN_DIR)/sample" ./cmd/sample
 
 test:
-	$(GO) test ./...
+	$(RDBSH_ENV) $(GO) test ./...
 
 run-hello:
 	$(GO) run -ldflags '$(LDFLAGS)' ./cmd/hello $(ARGS)

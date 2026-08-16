@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -41,28 +42,54 @@ func (s *Shell) cmdExport(args []string) error {
 		return err
 	}
 
-	file, err := openExportFile(filePath, s.config.Force)
+	count, err := writeExportFile(filePath, s.config.Force, func(w io.Writer) (int, error) {
+		return s.export(w, format, prefix)
+	})
 	if err != nil {
 		return err
-	}
-	count, exportErr := s.export(file, format, prefix)
-	closeErr := file.Close()
-	if exportErr != nil {
-		return exportErr
-	}
-	if closeErr != nil {
-		return fmt.Errorf("close export file: %w", closeErr)
 	}
 	_, err = fmt.Fprintf(s.out, "exported %d entries to %s (%s)\n", count, filePath, format)
 	return err
 }
 
-func openExportFile(filePath string, force bool) (*os.File, error) {
-	flag := os.O_WRONLY | os.O_CREATE | os.O_EXCL
-	if force {
-		flag = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+func writeExportFile(filePath string, force bool, write func(io.Writer) (int, error)) (int, error) {
+	if !force {
+		if _, err := os.Lstat(filePath); err == nil {
+			return 0, fmt.Errorf("export file %s already exists (use --force)", filePath)
+		} else if !os.IsNotExist(err) {
+			return 0, err
+		}
 	}
-	return os.OpenFile(filePath, flag, 0o644)
+
+	file, err := os.CreateTemp(filepath.Dir(filePath), ".rdbsh-export-*")
+	if err != nil {
+		return 0, err
+	}
+	tempPath := file.Name()
+	defer os.Remove(tempPath)
+
+	count, writeErr := write(file)
+	if writeErr != nil {
+		file.Close()
+		return 0, writeErr
+	}
+	if err := file.Chmod(0o644); err != nil {
+		file.Close()
+		return 0, err
+	}
+	if err := file.Close(); err != nil {
+		return 0, fmt.Errorf("close export file: %w", err)
+	}
+
+	if force {
+		err = os.Rename(tempPath, filePath)
+	} else {
+		err = os.Link(tempPath, filePath)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("publish export file: %w", err)
+	}
+	return count, nil
 }
 
 func (s *Shell) export(writer io.Writer, format string, prefix []byte) (int, error) {

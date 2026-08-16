@@ -23,6 +23,16 @@ func TestParseConfigFile(t *testing.T) {
 			want:    &KafkaConfig{Brokers: []string{"broker1:9092", "broker2:9092"}, SecurityProtocol: "PLAINTEXT", SSLVerify: true},
 		},
 		{
+			name:    "last broker setting wins",
+			content: "bootstrap.servers=old:9092\nmetadata.broker.list=new:9092\n",
+			want:    &KafkaConfig{Brokers: []string{"new:9092"}, SecurityProtocol: "PLAINTEXT", SSLVerify: true},
+		},
+		{
+			name:    "numeric false disables verification",
+			content: "bootstrap.servers=broker1:9092\nenable.ssl.certificate.verification=0\n",
+			want:    &KafkaConfig{Brokers: []string{"broker1:9092"}, SecurityProtocol: "PLAINTEXT", SSLVerify: false},
+		},
+		{
 			name: "full config",
 			content: strings.Join([]string{
 				"# comment",
@@ -70,6 +80,11 @@ func TestParseConfigFile(t *testing.T) {
 			name:    "unsupported security protocol",
 			content: "bootstrap.servers=broker1:9092\nsecurity.protocol=sasl-ssl\n",
 			wantErr: "unsupported security.protocol",
+		},
+		{
+			name:    "invalid certificate verification",
+			content: "bootstrap.servers=broker1:9092\nenable.ssl.certificate.verification=treu\n",
+			wantErr: "must be a valid boolean",
 		},
 	}
 

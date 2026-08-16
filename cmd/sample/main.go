@@ -57,6 +57,7 @@ Options:
 		Count:   *count,
 		Stable:  *stable,
 		Seed:    *seed,
+		SeedSet: flagWasSet("seed"),
 	}
 	if err := sample.Validate(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "sample: %v\n", err)

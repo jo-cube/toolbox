@@ -43,10 +43,11 @@ go test ./internal/prob ./internal/hll ./internal/bf ./internal/card ./internal/
 The full suite is:
 
 ```sh
-go test ./...
+make test
 ```
 
-`go test ./...` requires RocksDB development headers because `rdbsh` uses CGo.
+`make test` requires RocksDB development headers because `rdbsh` uses CGo. The
+Makefile detects RocksDB flags with `pkg-config` or Homebrew when available.
 On macOS, install them with:
 
 ```sh
