@@ -101,7 +101,7 @@ It does not:
 ## Options
 
 - `--rate P`: sample each record with probability `P`, from `0` to `1`
-- `--count N`: keep up to `N` records using reservoir sampling
+- `--count N`: keep up to a positive `N` records using reservoir sampling
 - `--stable`: use deterministic hash sampling with `--rate`
 - `--seed N`: seed random modes or stable hashing
 - `--version`, `-V`: print version information
@@ -110,6 +110,7 @@ Invalid combinations fail:
 
 - `--rate` with `--count`
 - `--stable` with `--count`
+- a non-positive `--count`
 - neither `--rate` nor `--count`
 
 ## Exit Status
