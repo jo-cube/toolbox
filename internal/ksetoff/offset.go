@@ -382,9 +382,15 @@ func fetchCurrentOffsets(ctx context.Context, admin *kadm.Client, groupID string
 		}
 		return currentOffsets, err
 	}
-
 	for _, partition := range partitions {
-		if fetchedOffset, ok := fetchedOffsets.Lookup(topic, partition); ok && fetchedOffset.At >= 0 {
+		fetchedOffset, ok := fetchedOffsets.Lookup(topic, partition)
+		if ok && fetchedOffset.Err != nil {
+			for _, partition := range partitions {
+				currentOffsets[partition] = "?"
+			}
+			return currentOffsets, fmt.Errorf("partition %d: %w", partition, fetchedOffset.Err)
+		}
+		if ok && fetchedOffset.At >= 0 {
 			currentOffsets[partition] = strconv.FormatInt(fetchedOffset.At, 10)
 			continue
 		}

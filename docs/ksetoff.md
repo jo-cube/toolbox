@@ -175,7 +175,9 @@ Notes:
 
 - One of `bootstrap.servers` or `metadata.broker.list` is required.
 - Unknown keys are ignored.
+- If a supported key appears more than once, the last value wins.
 - `security.protocol` must be one of `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`.
+- `enable.ssl.certificate.verification` must be a valid boolean.
 - If you use mTLS, both `ssl.certificate.location` and `ssl.key.location` must be set.
 - Encrypted private keys are not currently supported. If `ssl.key.password` is set, `ksetoff` returns a clear error.
 
