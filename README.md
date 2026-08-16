@@ -50,7 +50,7 @@ Release binaries are published for:
 | --- | --- | --- |
 | `hello` | Minimal reference CLI used as the simplest implementation example. | [`docs/hello.md`](docs/hello.md) |
 | `ksetoff` | Set Kafka consumer group offsets for a topic without starting the consumer app. | [`docs/ksetoff.md`](docs/ksetoff.md) |
-| `kshape` | Summarize the observed shape of a Kafka record stream across partitions and offsets. | [`docs/kshape.md`](docs/kshape.md) |
+| `kshape` | Summarize and render the observed shape of a Kafka record stream across partitions and offsets. | [`docs/kshape.md`](docs/kshape.md) |
 | `rdbsh` | Inspect local RocksDB databases interactively or with one-shot commands. | [`docs/rdbsh.md`](docs/rdbsh.md) |
 | `hll` | Estimate unique values in large streams with HyperLogLog. | [`docs/hll.md`](docs/hll.md) |
 | `bf` | Build and query Bloom filters for approximate membership tests. | [`docs/bf.md`](docs/bf.md) |
@@ -77,7 +77,7 @@ Build and inspect an observed Kafka log-shape summary:
 ```sh
 jkq -F kafka.conf -t events --snapshot -f "$(kshape format)" |
   kshape build > events.kshape
-kshape inspect events.kshape
+kshape render events.kshape > events.html
 ```
 
 Estimate unique users:

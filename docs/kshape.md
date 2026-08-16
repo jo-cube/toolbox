@@ -31,6 +31,7 @@ kshape --version
 kshape format
 kshape build [--bucket-width n] [--precision p] > topic.kshape
 kshape inspect [--json] [--bucket-width n] <topic.kshape>
+kshape render [--title text] [--metric name] <topic.kshape> > report.html
 kshape merge <a.kshape> <b.kshape>... > merged.kshape
 ```
 
@@ -48,6 +49,7 @@ Use command substitution so the producer receives that expression unchanged:
 ```sh
 jkq -F kafka.conf -t events --snapshot -f "$(kshape format)" |
   kshape build > events.kshape
+kshape render events.kshape > events.html
 ```
 
 `jkq` is the preferred producer. A compatible `kcat` pipeline is:
@@ -55,6 +57,7 @@ jkq -F kafka.conf -t events --snapshot -f "$(kshape format)" |
 ```sh
 kcat -F kafka.conf -C -t events -o beginning -e -f "$(kshape format)" |
   kshape build > events.kshape
+kshape render events.kshape > events.html
 ```
 
 Use the canonical formatter without key deserializers or null-replacement
@@ -91,6 +94,61 @@ jkq -F kafka.conf -t events --snapshot \
 This is intentional: `production-projection.kshape` describes that selected,
 projected stream. It does not claim to describe the source payloads that were
 not emitted.
+
+Render it in the same way as an untransformed profile:
+
+```sh
+kshape render production-projection.kshape > production-projection.html
+```
+
+The report does not relabel transformed data as a raw Kafka topic view.
+
+## Offline HTML report
+
+`render` writes one self-contained HTML document to stdout. CSS, JavaScript,
+and summary data are embedded; opening the file needs no Kafka connection,
+network access, server, or external assets.
+
+```sh
+kshape render events.kshape > events.html
+kshape render --title "Production events" --metric occupancy events.kshape > events.html
+```
+
+The main map has one row per observed partition. By default, each row spans
+that partition's own first-to-last observed offset so internal structure stays
+readable when partition ranges differ greatly. Shared-axis mode aligns every
+row to the artifact-wide observed offset bounds. Hatched space in that mode is
+outside a partition's observed bounds and is not presented as a known gap.
+
+Select a partition and use the zoom controls to inspect a smaller offset
+range. The report automatically switches among aligned power-of-two summary
+levels. It embeds the finest level, an adaptive whole-view level of roughly 240
+regions across the widest partition, and a midpoint level when those differ.
+HLL sketches are merged while rendering and are not copied into the HTML.
+
+The selectable map metrics are:
+
+- **Visible records**: exact supplied record count per aligned region.
+- **Observed occupancy**: exact supplied records divided by the first-to-last
+  observed offset span inside that region.
+- **Logical payload bytes**: exact non-tombstone payload-length sum, not Kafka
+  broker storage.
+- **Tombstone share**: exact supplied tombstones divided by supplied records in
+  the region.
+- **Approx. distinct keys**: the HLL estimate for non-null keys.
+- **Approx. records / distinct key**: keyed records divided by the approximate
+  distinct-key estimate; a visible repetition indicator, not compaction work.
+
+Count, byte, approximate-key, and rewrite intensity can be normalized within
+each partition or across the visible partitions. Occupancy and tombstone share
+always use a fixed 0–100% scale. Color is backed by partition labels, a
+numerical region inspector, a legend, and a partition comparison table.
+
+Hover or click a colored region to see its aligned and observed offset bounds,
+exact counters, approximate key metrics, and present timestamp range. Missing
+timestamps remain explicitly missing. The report never invents broker
+watermarks, disk sizes, records outside the supplied stream, or causes for
+offset gaps.
 
 ## Summary model
 
@@ -207,7 +265,7 @@ partitions, 1,000,000 non-empty regions, 10,000,000 merge-guard spans, and 1 GiB
 of aggregate HLL register data. These are file-read limits, not claims about
 Kafka itself.
 
-Future renderers and comparison tools must treat the finest bucket width, HLL
+Renderers and future comparison tools must treat the finest bucket width, HLL
 version and precision, hash name, artifact version, and observed-stream meaning
 as compatibility boundaries. Coarser levels may be derived only by merging
 aligned neighboring finest-region summaries; approximate distinct-key sketches
