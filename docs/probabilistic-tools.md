@@ -33,6 +33,7 @@ For tools that use the shared stream reader, these flags are available:
 Defaults are conservative:
 
 - one line is one item
+- LF and CRLF line endings are recognized and are not part of the item
 - case is preserved
 - whitespace is preserved unless `--trim` is set
 - empty lines are processed unless `--ignore-empty` is set
