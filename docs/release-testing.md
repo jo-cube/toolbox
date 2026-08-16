@@ -34,7 +34,7 @@ Run the fast release smoke suite:
 VERSION=v0.3.0 sh scripts/release-test/smoke.sh
 ```
 
-This starts an `ubuntu:24.04` container, installs all eight released tools into
+This starts an `ubuntu:24.04` container, installs all nine released tools into
 `/tmp/toolbox-bin`, and runs the per-tool scripts in
 `scripts/release-test/smoke/`.
 
@@ -51,7 +51,9 @@ It covers:
   overwrite protection, and read-only checks for `rdbsh`
 - stream options such as trimming, empty-record handling, and NUL-delimited
   input for tools that support them
-- state-file compatibility and corrupted state rejection for `hll` and `bf`
+- state-file compatibility and corrupted state rejection for `hll`, `bf`, and
+  `kshape`
+- canonical framing, build, inspection, and merge behavior for `kshape`
 - functional stream checks for `card`, `heavy`, and `sample`
 
 It does not start a Kafka broker. Use the Kafka test below for real `ksetoff`

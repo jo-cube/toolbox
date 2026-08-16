@@ -8,12 +8,13 @@ ROCKSDB_CGO_CFLAGS ?= $(shell if command -v pkg-config >/dev/null 2>&1 && pkg-co
 ROCKSDB_CGO_LDFLAGS ?= $(shell if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists rocksdb; then pkg-config --libs rocksdb; elif [ -n "$(ROCKSDB_PREFIX)" ]; then printf '%s' '-L$(ROCKSDB_PREFIX)/lib -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd'; fi)
 RDBSH_ENV = CGO_ENABLED=1 CGO_CFLAGS='$(ROCKSDB_CGO_CFLAGS)' CGO_LDFLAGS='$(ROCKSDB_CGO_LDFLAGS)'
 
-.PHONY: build test run-hello run-ksetoff run-rdbsh run-hll run-bf run-card run-heavy run-sample install-hello install-ksetoff install-rdbsh install-hll install-bf install-card install-heavy install-sample clean
+.PHONY: build test run-hello run-ksetoff run-kshape run-rdbsh run-hll run-bf run-card run-heavy run-sample install-hello install-ksetoff install-kshape install-rdbsh install-hll install-bf install-card install-heavy install-sample clean
 
 build:
 	@mkdir -p "$(BIN_DIR)"
 	$(GO) build -ldflags '$(LDFLAGS)' -o "$(BIN_DIR)/hello" ./cmd/hello
 	$(GO) build -ldflags '$(LDFLAGS)' -o "$(BIN_DIR)/ksetoff" ./cmd/ksetoff
+	$(GO) build -ldflags '$(LDFLAGS)' -o "$(BIN_DIR)/kshape" ./cmd/kshape
 	$(RDBSH_ENV) $(GO) build -ldflags '$(LDFLAGS)' -o "$(BIN_DIR)/rdbsh" ./cmd/rdbsh
 	$(GO) build -ldflags '$(LDFLAGS)' -o "$(BIN_DIR)/hll" ./cmd/hll
 	$(GO) build -ldflags '$(LDFLAGS)' -o "$(BIN_DIR)/bf" ./cmd/bf
@@ -29,6 +30,9 @@ run-hello:
 
 run-ksetoff:
 	$(GO) run -ldflags '$(LDFLAGS)' ./cmd/ksetoff $(ARGS)
+
+run-kshape:
+	$(GO) run -ldflags '$(LDFLAGS)' ./cmd/kshape $(ARGS)
 
 run-rdbsh:
 	$(RDBSH_ENV) $(GO) run -ldflags '$(LDFLAGS)' ./cmd/rdbsh $(ARGS)
@@ -55,6 +59,10 @@ install-hello:
 install-ksetoff:
 	@mkdir -p "$(LOCAL_BIN)"
 	GOBIN="$(LOCAL_BIN)" $(GO) install -ldflags '$(LDFLAGS)' ./cmd/ksetoff
+
+install-kshape:
+	@mkdir -p "$(LOCAL_BIN)"
+	GOBIN="$(LOCAL_BIN)" $(GO) install -ldflags '$(LDFLAGS)' ./cmd/kshape
 
 install-rdbsh:
 	@mkdir -p "$(LOCAL_BIN)"

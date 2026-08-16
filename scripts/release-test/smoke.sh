@@ -21,7 +21,7 @@ export TOOLBOX_BIN=/tmp/toolbox-bin
 apt-get update -qq >/dev/null
 apt-get install -y -qq curl ca-certificates jq librocksdb-dev rocksdb-tools >/dev/null
 
-for tool in hello ksetoff rdbsh hll bf card heavy sample; do
+for tool in hello ksetoff kshape rdbsh hll bf card heavy sample; do
 	sh /release-test/install-tool.sh "$tool"
 done
 
