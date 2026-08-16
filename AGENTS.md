@@ -5,10 +5,11 @@ Keep changes small, verify the behavior you touched, and report any local setup 
 
 ## Repo Map
 
-- `cmd/hello`, `cmd/ksetoff`, `cmd/rdbsh`, `cmd/hll`, `cmd/bf`, `cmd/card`, `cmd/heavy`, `cmd/sample`: CLI entrypoints and flag handling.
+- `cmd/hello`, `cmd/ksetoff`, `cmd/kshape`, `cmd/rdbsh`, `cmd/hll`, `cmd/bf`, `cmd/card`, `cmd/heavy`, `cmd/sample`: CLI entrypoints and flag handling.
 - `internal/buildinfo`: build-time version string.
 - `internal/hello`: minimal reference CLI behavior.
 - `internal/ksetoff`: Kafka config parsing, client setup, offset planning, display, and commits.
+- `internal/kshape`: canonical Kafka record parsing, offset-region summaries, artifacts, inspection, and merges.
 - `internal/rdbsh`: shell commands, parsing, formatting, export behavior.
 - `internal/rdbsh/rocksdb`: narrow CGo wrapper around the RocksDB C API.
 - `internal/prob`: shared stream input and stable hashing helpers for probabilistic tools.
@@ -37,7 +38,7 @@ gofmt -l .
 sh -n scripts/install.sh scripts/smoke-local.sh
 for f in $(find scripts/release-test -type f -name '*.sh' | sort); do sh -n "$f"; done
 go test ./internal/hello ./internal/ksetoff ./cmd/hello ./cmd/ksetoff
-go test ./internal/prob ./internal/hll ./internal/bf ./internal/card ./internal/heavy ./internal/sample ./cmd/hll ./cmd/bf ./cmd/card ./cmd/heavy ./cmd/sample
+go test ./internal/prob ./internal/hll ./internal/kshape ./internal/bf ./internal/card ./internal/heavy ./internal/sample ./cmd/kshape ./cmd/hll ./cmd/bf ./cmd/card ./cmd/heavy ./cmd/sample
 ```
 
 The full suite is:
