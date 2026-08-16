@@ -175,7 +175,7 @@ func TestArtifactIsDeterministicAndRejectsCorruption(t *testing.T) {
 	badHash := append([]byte(nil), dataA...)
 	badHash[bytes.Index(badHash, []byte(prob.HashName))] ^= 1
 	badChecksum := append([]byte(nil), dataA...)
-	badChecksum[len(badChecksum)-5] ^= 1
+	badChecksum[len(badChecksum)-1] ^= 1
 	tests := []struct {
 		name string
 		data []byte
@@ -225,6 +225,28 @@ func TestArtifactRejectsExcessiveDeclaredSketchDataBeforeAllocation(t *testing.T
 	}
 	if _, err := Read(bytes.NewReader(artifact.Bytes())); err == nil || !strings.Contains(err.Error(), "HLL register data exceeds") {
 		t.Fatalf("Read() error = %v", err)
+	}
+}
+
+func TestArtifactRejectsNonCanonicalCoverageAndInconsistentKeySketch(t *testing.T) {
+	t.Parallel()
+
+	adjacent := mustBuild(t, "events", 8, 8, 0, 2)
+	adjacent.Partitions[0].Regions[0].Coverage = []OffsetSpan{{0, 0}, {1, 2}}
+	if err := Write(&bytes.Buffer{}, adjacent); err == nil || !strings.Contains(err.Error(), "invalid observed offset coverage") {
+		t.Fatalf("Write(adjacent coverage) error = %v", err)
+	}
+
+	noKeyedRecords := mustBuild(t, "events", 8, 8, 0)
+	noKeyedRecords.Partitions[0].Regions[0].NullKeys = 1
+	if err := Write(&bytes.Buffer{}, noKeyedRecords); err == nil || !strings.Contains(err.Error(), "invalid key sketch") {
+		t.Fatalf("Write(non-empty key sketch) error = %v", err)
+	}
+
+	emptySketch := mustBuild(t, "events", 8, 8, 0)
+	clear(emptySketch.Partitions[0].Regions[0].Keys.Registers)
+	if err := Write(&bytes.Buffer{}, emptySketch); err == nil || !strings.Contains(err.Error(), "invalid key sketch") {
+		t.Fatalf("Write(empty key sketch) error = %v", err)
 	}
 }
 

@@ -293,11 +293,6 @@ func validateSummary(s *Summary) error {
 			if region == nil || region.Bucket != bucket || region.Keys == nil || region.Keys.Precision != s.Precision || len(region.Keys.Registers) != 1<<s.Precision {
 				return fmt.Errorf("invalid partition %d bucket %d", partitionID, bucket)
 			}
-			for _, rank := range region.Keys.Registers {
-				if rank > 65-s.Precision {
-					return fmt.Errorf("invalid partition %d bucket %d HLL register", partitionID, bucket)
-				}
-			}
 			totalCoverageSpans += uint64(len(region.Coverage))
 			if totalCoverageSpans > maxCoverageSpans {
 				return fmt.Errorf("summary has too many coverage spans")
@@ -324,7 +319,7 @@ func validateRegion(bucketWidth uint64, region *Region) error {
 	for i, span := range region.Coverage {
 		if span.FirstOffset < 0 || span.FirstOffset > span.LastOffset ||
 			uint64(span.FirstOffset) < start || uint64(span.LastOffset) > end ||
-			(i != 0 && span.FirstOffset <= region.Coverage[i-1].LastOffset) {
+			(i != 0 && (span.FirstOffset <= region.Coverage[i-1].LastOffset || span.FirstOffset == region.Coverage[i-1].LastOffset+1)) {
 			return fmt.Errorf("invalid observed offset coverage")
 		}
 		covered += uint64(span.LastOffset-span.FirstOffset) + 1
@@ -340,8 +335,20 @@ func validateRegion(bucketWidth uint64, region *Region) error {
 		if region.MinTimestamp != 0 || region.MaxTimestamp != 0 {
 			return fmt.Errorf("timestamp bounds present when all timestamps are missing")
 		}
-	} else if region.MinTimestamp > region.MaxTimestamp || region.MinTimestamp == -1 || region.MaxTimestamp == -1 {
+	} else if region.MinTimestamp < 0 || region.MinTimestamp > region.MaxTimestamp {
 		return fmt.Errorf("invalid timestamp bounds")
+	}
+	keyedRecords, nonzeroRegisters := region.Records-region.NullKeys, uint64(0)
+	for _, rank := range region.Keys.Registers {
+		if rank > 65-region.Keys.Precision {
+			return fmt.Errorf("invalid key sketch register")
+		}
+		if rank != 0 {
+			nonzeroRegisters++
+		}
+	}
+	if nonzeroRegisters > keyedRecords || keyedRecords != 0 && nonzeroRegisters == 0 {
+		return fmt.Errorf("invalid key sketch for %d keyed records", keyedRecords)
 	}
 	return nil
 }
