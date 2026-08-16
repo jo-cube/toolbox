@@ -26,13 +26,13 @@ func Build(r io.Reader, bucketWidth uint64, precision uint8) (*Summary, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := eachRecord(r, s.Add); err != nil {
+	if err := eachRecord(r, s); err != nil {
 		return nil, err
 	}
 	return s, nil
 }
 
-func eachRecord(r io.Reader, fn func(Record) error) error {
+func eachRecord(r io.Reader, s *Summary) error {
 	br := bufio.NewReaderSize(r, 64<<10)
 	var scratch [32 << 10]byte
 	var topic string
@@ -51,6 +51,9 @@ func eachRecord(r io.Reader, fn func(Record) error) error {
 		}
 		if topic == "" {
 			topic = string(rawTopic)
+			if err := validateTopic(topic); err != nil {
+				return fmt.Errorf("record %d: %w", number, err)
+			}
 		} else if !equalStringBytes(topic, rawTopic) {
 			return fmt.Errorf("record %d: topic %q differs from %q", number, rawTopic, topic)
 		}
@@ -84,8 +87,8 @@ func eachRecord(r io.Reader, fn func(Record) error) error {
 		if err != nil {
 			return fmt.Errorf("record %d: %w", number, err)
 		}
-		if keyLength < -1 {
-			return fmt.Errorf("record %d: key length must be -1 or non-negative", number)
+		if keyLength < -1 || keyLength > math.MaxInt32 {
+			return fmt.Errorf("record %d: key length must be -1 through %d", number, math.MaxInt32)
 		}
 
 		record := Record{
@@ -115,7 +118,7 @@ func eachRecord(r io.Reader, fn func(Record) error) error {
 		if terminator != '\n' {
 			return fmt.Errorf("record %d: invalid record terminator 0x%02x", number, terminator)
 		}
-		if err := fn(record); err != nil {
+		if err := s.Add(record); err != nil {
 			return fmt.Errorf("record %d: %w", number, err)
 		}
 	}
@@ -178,4 +181,18 @@ func parseDecimal(value []byte) (int64, error) {
 		return -int64(result), nil
 	}
 	return int64(result), nil
+}
+
+func validateTopic(topic string) error {
+	if topic == "" || topic == "." || topic == ".." || len(topic) > 249 {
+		return fmt.Errorf("invalid Kafka topic %q", topic)
+	}
+	for _, value := range []byte(topic) {
+		if value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z' ||
+			value >= '0' && value <= '9' || value == '.' || value == '_' || value == '-' {
+			continue
+		}
+		return fmt.Errorf("invalid Kafka topic %q", topic)
+	}
+	return nil
 }
