@@ -92,6 +92,7 @@ func TestBuildRejectsMalformedAndTruncatedFrames(t *testing.T) {
 		{"truncated key", []byte("events\t0\t1\t2\t3\t4\tab"), "read 4-byte key"},
 		{"bad terminator", []byte("events\t0\t1\t2\t3\t1\taX"), "invalid record terminator"},
 		{"negative offset", frame("events", 0, -1, 2, 3, nil, true), "offset must be non-negative"},
+		{"invalid timestamp", frame("events", 0, 1, -2, 3, nil, true), "timestamp must be -1 or non-negative"},
 		{"bad payload length", []byte("events\t0\t1\t2\t-2\t-1\n"), "payload length must be -1"},
 		{"bad key length", []byte("events\t0\t1\t2\t3\t-2\t\n"), "key length must be -1 through"},
 		{"excessive key length", []byte("events\t0\t1\t2\t3\t2147483648\t\n"), "key length must be -1 through"},

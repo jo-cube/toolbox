@@ -111,6 +111,9 @@ func (s *Summary) Add(record Record) error {
 	if record.PayloadLength < -1 {
 		return fmt.Errorf("payload length must be -1 or non-negative")
 	}
+	if record.Timestamp < -1 {
+		return fmt.Errorf("timestamp must be -1 or non-negative")
+	}
 
 	partition := s.Partitions[record.Partition]
 	if partition != nil && partition.hasOffset && record.Offset <= partition.lastOffset {

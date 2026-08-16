@@ -76,6 +76,9 @@ func eachRecord(r io.Reader, s *Summary) error {
 		if err != nil {
 			return fmt.Errorf("record %d: %w", number, err)
 		}
+		if timestamp < -1 {
+			return fmt.Errorf("record %d: timestamp must be -1 or non-negative", number)
+		}
 		payloadLength, err := readDecimalField(br, "payload length")
 		if err != nil {
 			return fmt.Errorf("record %d: %w", number, err)
