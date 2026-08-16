@@ -17,6 +17,9 @@ kshape inspect /tmp/merged.kshape | grep -q 'type=kafka-retained-log-shape' ||
 kshape inspect --json --bucket-width 8 /tmp/merged.kshape |
 	jq -e '.topic == "events" and (.partitions | length) == 2 and .partitions[0].regions[0].observed_tombstones == 1' >/dev/null ||
 	fail "kshape inspect json"
+kshape render /tmp/merged.kshape >/tmp/merged.html
+grep -q '<!doctype html>' /tmp/merged.html ||
+	fail "kshape render"
 
 printf 'not a kshape file\n' > /tmp/bad.kshape
 expect_status 1 "kshape rejects corrupt state" kshape inspect /tmp/bad.kshape
