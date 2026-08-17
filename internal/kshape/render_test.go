@@ -23,7 +23,7 @@ func TestRenderProducesDeterministicOfflineMultiresolutionReport(t *testing.T) {
 	title := `shape </title><script>alert("no")</script>`
 	var first, second bytes.Buffer
 	for _, out := range []*bytes.Buffer{&first, &second} {
-		if err := Render(out, summary, title, "distinct"); err != nil {
+		if err := Render(out, summary, title, "churn"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -32,8 +32,8 @@ func TestRenderProducesDeterministicOfflineMultiresolutionReport(t *testing.T) {
 	}
 	html := first.String()
 	for _, want := range []string{
-		"<!doctype html>", "Partition × offset-space shape", "Approx. distinct keys",
-		"theoretical relative error 6.50%", "Zoom stops at the artifact’s finest bucket width",
+		"<!doctype html>", "Offset shape", "Visible versions / key",
+		"theoretical relative error 6.50%", "Select a partition, then zoom",
 		"shape &lt;/title&gt;&lt;script&gt;alert",
 	} {
 		if !strings.Contains(html, want) {
@@ -45,9 +45,19 @@ func TestRenderProducesDeterministicOfflineMultiresolutionReport(t *testing.T) {
 			t.Errorf("rendered HTML unexpectedly contains %q", unwanted)
 		}
 	}
+	for _, unwanted := range []string{"Intensity scale", `<option value="records">`, `<span class="label">Logical payload</span>`, "Partition comparison"} {
+		if strings.Contains(html, unwanted) {
+			t.Errorf("rendered HTML retained low-signal UI %q", unwanted)
+		}
+	}
+	for _, want := range []string{"Tombstones present:", "Stream details", "Partition totals"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("rendered HTML does not contain progressive detail %q", want)
+		}
+	}
 
 	data := decodeRenderData(t, html)
-	if data.InitialMetric != "distinct" || len(data.Partitions) != 2 {
+	if data.InitialMetric != "churn" || len(data.Partitions) != 2 {
 		t.Fatalf("render data = %#v", data)
 	}
 	if got := data.Partitions[0].Levels; len(got) != 3 || got[0].Width != "4" || got[1].Width != "8" || got[2].Width != "16" {
@@ -60,6 +70,21 @@ func TestRenderProducesDeterministicOfflineMultiresolutionReport(t *testing.T) {
 	}
 }
 
+func TestCompactRenderNumbers(t *testing.T) {
+	t.Parallel()
+
+	for value, want := range map[uint64]string{
+		999:         "999",
+		12_417:      "12.4K",
+		184_000_000: "184M",
+		999_999:     "1M",
+	} {
+		if got := compactUint(value); got != want {
+			t.Errorf("compactUint(%d) = %q, want %q", value, got, want)
+		}
+	}
+}
+
 func TestRenderHandlesEmptyAndManyPartitionSummaries(t *testing.T) {
 	t.Parallel()
 
@@ -68,7 +93,7 @@ func TestRenderHandlesEmptyAndManyPartitionSummaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := Render(&out, empty, "", "records"); err != nil {
+	if err := Render(&out, empty, "", "density"); err != nil {
 		t.Fatal(err)
 	}
 	if data := decodeRenderData(t, out.String()); data.Partitions == nil || len(data.Partitions) != 0 {
@@ -87,7 +112,7 @@ func TestRenderHandlesEmptyAndManyPartitionSummaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	out.Reset()
-	if err := Render(&out, many, "", "records"); err != nil {
+	if err := Render(&out, many, "", "density"); err != nil {
 		t.Fatal(err)
 	}
 	if data := decodeRenderData(t, out.String()); len(data.Partitions) != len(frames) || data.Partitions[127].ID != 127 {
@@ -102,7 +127,7 @@ func TestRenderHandlesEmptyAndManyPartitionSummaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	out.Reset()
-	if err := Render(&out, maximum, "", "records"); err != nil {
+	if err := Render(&out, maximum, "", "density"); err != nil {
 		t.Fatal(err)
 	}
 	data := decodeRenderData(t, out.String())

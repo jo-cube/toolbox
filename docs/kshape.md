@@ -30,6 +30,7 @@ kshape --version
 ```text
 kshape format
 kshape build [--bucket-width n] [--precision p] > topic.kshape
+kshape show <topic.kshape>
 kshape inspect [--json] [--bucket-width n] <topic.kshape>
 kshape render [--title text] [--metric name] <topic.kshape> > report.html
 kshape merge <a.kshape> <b.kshape>... > merged.kshape
@@ -49,6 +50,7 @@ Use command substitution so the producer receives that expression unchanged:
 ```sh
 jkq -F kafka.conf -t events --snapshot -f "$(kshape format)" |
   kshape build > events.kshape
+kshape show events.kshape
 kshape render events.kshape > events.html
 ```
 
@@ -57,6 +59,7 @@ kshape render events.kshape > events.html
 ```sh
 kcat -F kafka.conf -C -t events -o beginning -e -f "$(kshape format)" |
   kshape build > events.kshape
+kshape show events.kshape
 kshape render events.kshape > events.html
 ```
 
@@ -98,10 +101,38 @@ not emitted.
 Render it in the same way as an untransformed profile:
 
 ```sh
+kshape show production-projection.kshape
 kshape render production-projection.kshape > production-projection.html
 ```
 
-The report does not relabel transformed data as a raw Kafka topic view.
+Both views describe the transformed output. They do not relabel it as a raw
+Kafka topic view.
+
+## Terminal view
+
+`show` is the concise human and agent-readable view. It prints scale and key
+repetition once, followed by one offset-density strip per partition:
+
+```text
+topic: events
+partitions: 2  records: 26  keys: ~25  visible versions/key: ~1x
+density: 54.2% of observed offset spans
+
+offset density
+p0  [@@@@@@@@@@@@@@@@@@@@@@@@]  24 records  100.0% dense
+p1  [@                      @]  2 records  8.3% dense
+```
+
+Every ASCII character covers an equal slice of that partition's own observed
+first-to-last offset span. The characters ` .:-=+*#%@` run from empty to dense.
+The row also states its exact visible-record count and density, so the output
+does not depend on interpreting the strip. No color, Unicode, or TTY detection
+is used; redirected output is identical. A tombstone summary line appears only
+when tombstones are present.
+
+Use `show` for a quick terminal or SSH read, `render` for interactive regional
+exploration, and `inspect` for detailed artifact fields, coarser bucket reports,
+or JSON consumed by scripts.
 
 ## Offline HTML report
 
@@ -111,14 +142,21 @@ network access, server, or external assets.
 
 ```sh
 kshape render events.kshape > events.html
-kshape render --title "Production events" --metric occupancy events.kshape > events.html
+kshape render --title "Production events" --metric churn events.kshape > events.html
 ```
 
-The main map has one row per observed partition. By default, each row spans
-that partition's own first-to-last observed offset so internal structure stays
-readable when partition ranges differ greatly. Shared-axis mode aligns every
-row to the artifact-wide observed offset bounds. Hatched space in that mode is
-outside a partition's observed bounds and is not presented as a known gap.
+The report opens with four orienting signals: visible records, visible density,
+estimated distinct non-null keys, and visible versions per key. Tombstones get
+a separate summary only when present. Payload totals, timestamps, null keys,
+and missing timestamps stay under **Stream details** until requested.
+
+The offset map is the main report. Its default **Visible density** view divides
+exact supplied records by aligned offset positions inside each partition's
+observed bounds. Dense and sparse regions therefore use a common 0–100% scale.
+Each row normally spans that partition's own first-to-last observed offset so
+internal structure stays readable. Shared alignment is available when absolute
+offset positions across partitions matter; hatched space then means outside a
+partition's observed bounds, not a known gap.
 
 Select a partition and use the zoom controls to inspect a smaller offset
 range. The report automatically switches among aligned power-of-two summary
@@ -128,29 +166,27 @@ Zoom stops at the artifact's finest bucket width rather than implying
 sub-bucket detail. HLL sketches are merged while rendering and are not copied
 into the HTML.
 
-The selectable map metrics are:
+The secondary map views answer narrower questions:
 
-- **Visible records**: exact supplied record count per aligned region.
-- **Observed occupancy**: exact supplied records divided by the first-to-last
-  observed offset span inside that region.
-- **Logical payload bytes**: exact non-tombstone payload-length sum, not Kafka
-  broker storage.
+- **Visible key churn**: color begins above one surviving keyed record per
+  estimated distinct key. It describes visible repetition, not historical
+  writes or versions already removed by compaction.
 - **Tombstone share**: exact supplied tombstones divided by supplied records in
-  the region.
-- **Approx. distinct keys**: the HLL estimate for non-null keys.
-- **Approx. records / distinct key**: keyed records divided by the approximate
-  distinct-key estimate; a visible repetition indicator, not compaction work.
+  the region. The option is omitted when none are present.
+- **Average payload size**: logical payload bytes divided by visible
+  non-tombstone records. It is useful for regional payload differences, not
+  broker disk usage.
 
-Count, byte, approximate-key, and rewrite intensity can be normalized within
-each partition or across the visible partitions. Occupancy and tombstone share
-always use a fixed 0–100% scale. Color is backed by partition labels, a
-numerical region inspector, a legend, and a partition comparison table.
+Key-churn and payload colors share one maximum across visible partitions;
+density and tombstone share use a fixed 0–100% scale. Select or hover over a
+region to reveal semantically grouped offset/time, shape, key, tombstone, and
+payload details. Partition totals are collapsed by default and retain only the
+comparison fields that help explain skew.
 
-Hover or click a colored region to see its aligned and observed offset bounds,
-exact counters, approximate key metrics, and present timestamp range. Missing
-timestamps remain explicitly missing. The report never invents broker
-watermarks, disk sizes, records outside the supplied stream, or causes for
-offset gaps.
+`~` marks HLL-derived key values. Headline counts use compact notation such as
+`12.4M`, while selected-region and `inspect` output retain exact counters. The
+report never invents broker watermarks, disk sizes, records outside the supplied
+stream, or causes for offset gaps.
 
 ## Summary model
 

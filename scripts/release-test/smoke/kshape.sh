@@ -17,6 +17,8 @@ kshape inspect /tmp/merged.kshape | grep -q 'type=kafka-retained-log-shape' ||
 kshape inspect --json --bucket-width 8 /tmp/merged.kshape |
 	jq -e '.topic == "events" and (.partitions | length) == 2 and .partitions[0].regions[0].observed_tombstones == 1' >/dev/null ||
 	fail "kshape inspect json"
+kshape show /tmp/merged.kshape | grep -q '^offset density$' ||
+	fail "kshape show"
 kshape render /tmp/merged.kshape >/tmp/merged.html
 grep -q '<!doctype html>' /tmp/merged.html ||
 	fail "kshape render"
