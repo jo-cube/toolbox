@@ -119,6 +119,7 @@ It checks version aliases, help output, representative exit statuses, and the `h
 - retains disjoint merge-guard spans so overlap checks stay order-independent
 - rejects duplicate or decreasing offsets within a partition
 - protects version 2 artifacts with a CRC32C checksum
+- prints a plain-ASCII density summary for terminals and logs
 - renders a self-contained HTML report from adaptive, aligned summary levels
 
 `rdbsh`:

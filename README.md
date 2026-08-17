@@ -77,6 +77,7 @@ Build and inspect an observed Kafka log-shape summary:
 ```sh
 jkq -F kafka.conf -t events --snapshot -f "$(kshape format)" |
   kshape build > events.kshape
+kshape show events.kshape
 kshape render events.kshape > events.html
 ```
 
