@@ -62,12 +62,22 @@ func TestFormatBuildInspectAndMergePipeline(t *testing.T) {
 		}
 	}
 
+	var showOut bytes.Buffer
+	errOut.Reset()
+	if status := run([]string{"show", mergedPath}, nil, &showOut, &errOut); status != 0 {
+		t.Fatalf("show status = %d, stderr = %s", status, errOut.String())
+	}
+	wantShow := "topic: events\npartitions: 2  records: 2  keys: ~2  visible versions/key: ~1x\ndensity: 100.0% of observed offset spans\n\noffset density\np0  [@]  1 record  100.0% dense\np1  [@]  1 record  100.0% dense\n"
+	if showOut.String() != wantShow {
+		t.Fatalf("show output:\n%s\nwant:\n%s", showOut.String(), wantShow)
+	}
+
 	var renderOut bytes.Buffer
 	errOut.Reset()
-	if status := run([]string{"render", "--title", "events <shape>", "--metric", "rewrite", mergedPath}, nil, &renderOut, &errOut); status != 0 {
+	if status := run([]string{"render", "--title", "events <shape>", "--metric", "churn", mergedPath}, nil, &renderOut, &errOut); status != 0 {
 		t.Fatalf("render status = %d, stderr = %s", status, errOut.String())
 	}
-	for _, want := range []string{"<!doctype html>", "events &lt;shape&gt;", `"initialMetric":"rewrite"`, "Partition × offset-space shape"} {
+	for _, want := range []string{"<!doctype html>", "events &lt;shape&gt;", `"initialMetric":"churn"`, "Offset shape"} {
 		if !strings.Contains(renderOut.String(), want) {
 			t.Errorf("render output does not contain %q", want)
 		}
@@ -84,6 +94,11 @@ func TestRunExitStatuses(t *testing.T) {
 		}
 	}
 	var out, errOut bytes.Buffer
+	if status := run([]string{"show", "--help"}, nil, &out, &errOut); status != 0 || !strings.Contains(errOut.String(), "plain-ASCII") {
+		t.Fatalf("show help status = %d, stderr = %q", status, errOut.String())
+	}
+	out.Reset()
+	errOut.Reset()
 	if status := run([]string{"build"}, bytes.NewBufferString("bad"), &out, &errOut); status != 1 {
 		t.Fatalf("malformed build status = %d, want 1", status)
 	}

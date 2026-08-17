@@ -45,6 +45,8 @@ func run(args []string, in io.Reader, out, errOut io.Writer) int {
 		err = build(args[1:], in, out, errOut)
 	case "inspect":
 		err = inspect(args[1:], out, errOut)
+	case "show":
+		err = show(args[1:], out, errOut)
 	case "render":
 		err = render(args[1:], out, errOut)
 	case "merge":
@@ -73,12 +75,13 @@ func run(args []string, in io.Reader, out, errOut io.Writer) int {
 func usage(out io.Writer) {
 	fmt.Fprint(out, `Usage: kshape <command> [options]
 
-Build, inspect, and render mergeable summaries of observed Kafka record streams.
+Build and read mergeable summaries of observed Kafka record streams.
 
 Commands:
   format   Print the canonical jkq/kcat -f expression.
   build    Read canonical records and write a binary .kshape artifact.
-  inspect  Print an artifact at whole-partition or coarser bucket resolution.
+  show     Print a concise terminal view of the stream shape.
+  inspect  Print detailed artifact metrics for diagnostics or scripts.
   render   Write a self-contained offline HTML report.
   merge    Merge compatible non-overlapping artifacts.
 
@@ -87,6 +90,7 @@ Global options:
 
 Example:
   jkq ... -f "$(kshape format)" | kshape build > topic.kshape
+  kshape show topic.kshape
   kshape render topic.kshape > topic.html
 `)
 }
@@ -169,11 +173,30 @@ Options:
 	return writeReport(out, report)
 }
 
+func show(args []string, out, errOut io.Writer) error {
+	if len(args) == 1 && (args[0] == "-h" || args[0] == "--help") {
+		fmt.Fprint(errOut, `Usage: kshape show <file.kshape>
+
+Print a concise plain-ASCII view of density across each partition's observed
+offset span. Output is identical on terminals and when redirected.
+`)
+		return errHelp
+	}
+	if len(args) != 1 {
+		return usageError("usage: kshape show <file.kshape>")
+	}
+	summary, err := readSummary(args[0])
+	if err != nil {
+		return err
+	}
+	return kshape.Show(out, summary)
+}
+
 func render(args []string, out, errOut io.Writer) error {
 	fs := flag.NewFlagSet("kshape render", flag.ContinueOnError)
 	fs.SetOutput(errOut)
 	title := fs.String("title", "", "report title; defaults to the topic identity")
-	metric := fs.String("metric", "records", "initial metric: records, occupancy, bytes, tombstones, distinct, or rewrite")
+	metric := fs.String("metric", "density", "initial view: density, churn, tombstones, or payload")
 	fs.Usage = func() {
 		fmt.Fprint(fs.Output(), `Usage: kshape render [options] <file.kshape> > report.html
 
@@ -190,7 +213,7 @@ Options:
 		return usageError("usage: kshape render [options] <file>")
 	}
 	if !kshape.ValidRenderMetric(*metric) {
-		return usageError("render metric must be records, occupancy, bytes, tombstones, distinct, or rewrite")
+		return usageError("render metric must be density, churn, tombstones, or payload")
 	}
 	summary, err := readSummary(fs.Arg(0))
 	if err != nil {

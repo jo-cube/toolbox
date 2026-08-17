@@ -35,11 +35,13 @@ type renderPage struct {
 type renderOverview struct {
 	PartitionCount int
 	Records        string
+	RecordsExact   string
 	PayloadBytes   string
 	PayloadExact   string
 	Occupancy      string
 	Tombstones     string
 	TombstoneRatio string
+	HasTombstones  bool
 	DistinctKeys   string
 	RecordsPerKey  string
 	KeyedRecords   string
@@ -53,9 +55,6 @@ type renderPartitionOverview struct {
 	Offsets       string
 	Records       string
 	RecordsBar    float64
-	PayloadBytes  string
-	PayloadExact  string
-	PayloadBar    float64
 	Occupancy     string
 	Tombstones    string
 	DistinctKeys  string
@@ -86,9 +85,7 @@ type renderRegion struct {
 	End                 string  `json:"end"`
 	First               string  `json:"first"`
 	Last                string  `json:"last"`
-	Span                string  `json:"span"`
 	Records             string  `json:"records"`
-	Occupancy           float64 `json:"occupancy"`
 	PayloadBytes        string  `json:"payloadBytes"`
 	Tombstones          string  `json:"tombstones"`
 	NullKeys            string  `json:"nullKeys"`
@@ -102,7 +99,7 @@ type renderRegion struct {
 
 func ValidRenderMetric(metric string) bool {
 	switch metric {
-	case "records", "occupancy", "bytes", "tombstones", "distinct", "rewrite":
+	case "density", "churn", "tombstones", "payload":
 		return true
 	default:
 		return false
@@ -148,8 +145,8 @@ func buildRenderPage(summary *Summary, whole Report, title, initialMetric string
 	data := renderData{InitialMetric: initialMetric, Partitions: []renderPartition{}}
 	if len(whole.Partitions) == 0 {
 		page.Overview = renderOverview{
-			Records: "0", PayloadBytes: "0 B", PayloadExact: "0 bytes", Occupancy: "—",
-			Tombstones: "0", TombstoneRatio: "—", DistinctKeys: "≈0", RecordsPerKey: "—",
+			Records: "0", RecordsExact: "0", PayloadBytes: "0 B", PayloadExact: "0 bytes", Occupancy: "—",
+			Tombstones: "0", TombstoneRatio: "—", HasTombstones: initialMetric == "tombstones", DistinctKeys: "~0", RecordsPerKey: "—",
 			KeyedRecords: "0", NullKeys: "0", MissingTimes: "0", TimestampRange: "No observed timestamps",
 		}
 		return page, data, nil
@@ -198,6 +195,7 @@ func buildRenderPage(summary *Summary, whole Report, title, initialMetric string
 	if err != nil {
 		return renderPage{}, renderData{}, err
 	}
+	overview.HasTombstones = overview.HasTombstones || initialMetric == "tombstones"
 	page.Overview, page.Partitions = overview, partitions
 	return page, data, nil
 }
@@ -227,8 +225,7 @@ func makeRenderRegion(region RegionReport) renderRegion {
 	rendered := renderRegion{
 		Start: strconv.FormatUint(region.RegionFirstOffset, 10), End: strconv.FormatUint(region.RegionLastOffset, 10),
 		First: strconv.FormatInt(region.ObservedFirstOffset, 10), Last: strconv.FormatInt(region.ObservedLastOffset, 10),
-		Span: strconv.FormatUint(region.ObservedSpan, 10), Records: strconv.FormatUint(region.ObservedRecords, 10),
-		Occupancy: region.ObservedOccupancy, PayloadBytes: strconv.FormatUint(region.LogicalPayloadBytes, 10),
+		Records: strconv.FormatUint(region.ObservedRecords, 10), PayloadBytes: strconv.FormatUint(region.LogicalPayloadBytes, 10),
 		Tombstones: strconv.FormatUint(region.ObservedTombstones, 10), NullKeys: strconv.FormatUint(region.NullKeys, 10),
 		KeyedRecords: strconv.FormatUint(region.KeyedRecords, 10), MissingTimestamps: strconv.FormatUint(region.MissingTimestamps, 10),
 		ApproxDistinctKeys: strconv.FormatUint(region.ApproxDistinctKeys, 10), ApproxRecordsPerKey: region.ApproxRecordsPerKey,
@@ -247,7 +244,7 @@ func buildRenderOverview(summary *Summary, whole Report) (renderOverview, []rend
 	var minTimestamp, maxTimestamp int64
 	hasTimestamp := false
 	partitions := make([]renderPartitionOverview, 0, len(whole.Partitions))
-	var maxRecords, maxPayload uint64
+	var maxRecords uint64
 
 	for _, partition := range whole.Partitions {
 		region := partition.Regions[0]
@@ -259,7 +256,6 @@ func buildRenderOverview(summary *Summary, whole Report) (renderOverview, []rend
 		addUint(spans, region.ObservedSpan)
 		addUint(missingTimes, region.MissingTimestamps)
 		maxRecords = max(maxRecords, region.ObservedRecords)
-		maxPayload = max(maxPayload, region.LogicalPayloadBytes)
 		if region.MinTimestamp != nil {
 			if !hasTimestamp || *region.MinTimestamp < minTimestamp {
 				minTimestamp = *region.MinTimestamp
@@ -277,19 +273,15 @@ func buildRenderOverview(summary *Summary, whole Report) (renderOverview, []rend
 		partitions = append(partitions, renderPartitionOverview{
 			ID:      partition.Partition,
 			Offsets: fmt.Sprintf("%s–%s", formatInt(region.ObservedFirstOffset), formatInt(region.ObservedLastOffset)),
-			Records: formatUint(region.ObservedRecords), PayloadBytes: formatBytes(region.LogicalPayloadBytes),
-			PayloadExact: formatUint(region.LogicalPayloadBytes) + " bytes", Occupancy: formatPercent(region.ObservedOccupancy),
+			Records: formatUint(region.ObservedRecords), Occupancy: formatPercent(region.ObservedOccupancy),
 			Tombstones:   fmt.Sprintf("%s (%s)", formatUint(region.ObservedTombstones), ratioPercent(region.ObservedTombstones, region.ObservedRecords)),
-			DistinctKeys: "≈" + formatUint(region.ApproxDistinctKeys), RecordsPerKey: formatFactor(region.ApproxRecordsPerKey),
+			DistinctKeys: "~" + compactUint(region.ApproxDistinctKeys), RecordsPerKey: formatFactor(region.ApproxRecordsPerKey),
 		})
 	}
 	for i, partition := range whole.Partitions {
 		region := partition.Regions[0]
 		if maxRecords != 0 {
 			partitions[i].RecordsBar = float64(region.ObservedRecords) / float64(maxRecords)
-		}
-		if maxPayload != 0 {
-			partitions[i].PayloadBar = float64(region.LogicalPayloadBytes) / float64(maxPayload)
 		}
 	}
 
@@ -298,9 +290,10 @@ func buildRenderOverview(summary *Summary, whole Report) (renderOverview, []rend
 		distinct = min(distinct, keyed.Uint64())
 	}
 	overview := renderOverview{
-		PartitionCount: len(whole.Partitions), Records: formatBig(records), PayloadBytes: formatBigBytes(payload),
+		PartitionCount: len(whole.Partitions), Records: compactBig(records), RecordsExact: formatBig(records), PayloadBytes: formatBigBytes(payload),
 		PayloadExact: formatBig(payload) + " bytes", Occupancy: bigPercent(records, spans),
-		Tombstones: formatBig(tombstones), TombstoneRatio: bigPercent(tombstones, records), DistinctKeys: "≈" + formatUint(distinct),
+		Tombstones: compactBig(tombstones), TombstoneRatio: bigPercent(tombstones, records), HasTombstones: tombstones.Sign() != 0,
+		DistinctKeys:  "~" + compactUint(distinct),
 		RecordsPerKey: bigFactor(keyed, distinct), KeyedRecords: formatBig(keyed), NullKeys: formatBig(nullKeys),
 		MissingTimes: formatBig(missingTimes), TimestampRange: "No observed timestamps",
 	}
@@ -318,6 +311,35 @@ func formatBig(value *big.Int) string { return commas(value.String()) }
 
 func formatUint(value uint64) string { return commas(strconv.FormatUint(value, 10)) }
 
+func compactUint(value uint64) string { return compactBig(new(big.Int).SetUint64(value)) }
+
+func compactBig(value *big.Int) string {
+	if value.Cmp(big.NewInt(1000)) < 0 {
+		return formatBig(value)
+	}
+	units := []string{"K", "M", "B", "T", "Q", "E"}
+	divisor := big.NewInt(1000)
+	unit := 0
+	for unit < len(units)-1 {
+		next := new(big.Int).Mul(divisor, big.NewInt(1000))
+		if value.Cmp(next) < 0 {
+			break
+		}
+		divisor = next
+		unit++
+	}
+	scaled, _ := new(big.Rat).SetFrac(value, divisor).Float64()
+	if scaled >= 999.5 && unit < len(units)-1 {
+		scaled /= 1000
+		unit++
+	}
+	digits := 1
+	if scaled >= 100 {
+		digits = 0
+	}
+	return strings.TrimSuffix(fmt.Sprintf("%.*f", digits, scaled), ".0") + units[unit]
+}
+
 func formatInt(value int64) string { return commas(strconv.FormatInt(value, 10)) }
 
 func commas(value string) string {
@@ -331,7 +353,7 @@ func commas(value string) string {
 	return value
 }
 
-func formatPercent(value float64) string { return fmt.Sprintf("%.2f%%", value*100) }
+func formatPercent(value float64) string { return fmt.Sprintf("%.1f%%", value*100) }
 
 func ratioPercent(numerator, denominator uint64) string {
 	if denominator == 0 {
@@ -352,7 +374,7 @@ func formatFactor(value float64) string {
 	if value == 0 {
 		return "—"
 	}
-	return fmt.Sprintf("≈%.2f×", value)
+	return "~" + strings.TrimSuffix(fmt.Sprintf("%.1f", value), ".0") + "×"
 }
 
 func bigFactor(records *big.Int, distinct uint64) string {
