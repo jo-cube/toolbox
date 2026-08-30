@@ -29,12 +29,18 @@ printf "aa\0bb\0" | sample -0 --rate 1 - > /tmp/sample-nul.out
 printf "aa\0bb\0" > /tmp/sample-nul.want
 cmp /tmp/sample-nul.out /tmp/sample-nul.want || fail "sample nul records"
 
+printf "1\tgroup-a\tfirst\n2\tgroup-b\tsecond\n" > /tmp/sample-fields.txt
+sample --rate 1 --stable -d "$(printf '\t')" -f 2 /tmp/sample-fields.txt > /tmp/sample-fields.out
+cmp /tmp/sample-fields.txt /tmp/sample-fields.out || fail "sample stable field preserves records"
+
 expect_status 2 "sample ambiguous flags" \
 	sample --rate 0.1 --count 10 /tmp/sample-values.txt
 expect_status 2 "sample rejects explicitly set zero count with rate" \
 	sample --rate 0.1 --count 0 /tmp/sample-values.txt
 expect_status 2 "sample rejects stable count" \
 	sample --count 10 --stable /tmp/sample-values.txt
+expect_status 2 "sample restricts fields to stable mode" \
+	sample --rate 0.5 -d "$(printf '\t')" -f 2 /tmp/sample-fields.txt
 expect_status 2 "sample requires mode" sample /tmp/sample-values.txt
 expect_status 2 "sample rejects bad rate" sample --rate 1.5 /tmp/sample-values.txt
 

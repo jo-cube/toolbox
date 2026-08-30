@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/jo-cube/toolbox/internal/buildinfo"
+	"github.com/jo-cube/toolbox/internal/prob"
 	"github.com/jo-cube/toolbox/internal/sample"
 )
 
@@ -20,6 +21,8 @@ func main() {
 	seed := flag.Int64("seed", 0, "random or stable hash seed")
 	nul := flag.Bool("nul", false, "read and write NUL-delimited records")
 	flag.BoolVar(nul, "0", false, "read and write NUL-delimited records")
+	var fields prob.FieldOptions
+	prob.AddFieldFlags(flag.CommandLine, &fields)
 
 	flag.Usage = func() {
 		name := filepath.Base(os.Args[0])
@@ -31,13 +34,14 @@ Set exactly one of --rate or --count.
 Examples:
   sample --rate 0.01 events.jsonl
   sample --rate 0.01 --stable events.jsonl
+  sample --rate 0.01 --stable -d $'\t' -f 2 events.tsv
   sample --count 10000 huge-file.txt
 
 Notes:
-	  --rate samples each record independently unless --stable is set.
-	  --stable hashes the full record without its trailing delimiter.
-	  -0 and --nul preserve NUL-delimited records instead of newline-delimited records.
-	  --count uses reservoir sampling and writes selected records after reading input.
+  --rate samples each record independently unless --stable is set.
+  --stable hashes the full record or a selected field without its trailing delimiter.
+  -0 and --nul preserve NUL-delimited records instead of newline-delimited records.
+  --count uses reservoir sampling and writes selected records after reading input.
 
 Options:
 `, name)
@@ -63,6 +67,7 @@ Options:
 		Seed:     *seed,
 		SeedSet:  flagWasSet("seed"),
 		NUL:      *nul,
+		Fields:   fields,
 	}
 	if err := sample.Validate(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "sample: %v\n", err)

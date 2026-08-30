@@ -31,7 +31,7 @@ sample --version
 ## Synopsis
 
 ```sh
-sample --rate <p> [--stable] [--seed n] [-0] [file...]
+sample --rate <p> [--stable] [--seed n] [--delimiter value --field n] [-0] [file...]
 sample --count <n> [--seed n] [-0] [file...]
 ```
 
@@ -49,6 +49,12 @@ Stable 1% sample by full record:
 
 ```sh
 sample --rate 0.01 --stable events.jsonl
+```
+
+Stable 1% cohort sample by the second tab-delimited field:
+
+```sh
+sample --rate 0.01 --stable -d $'\t' -f 2 events.tsv
 ```
 
 Reproducible random sample:
@@ -79,7 +85,7 @@ Without `--seed`, random mode uses the current time as the seed.
 
 The same input record, rate, and seed produce the same decision across runs.
 
-Stable mode hashes the full record without its trailing newline or NUL delimiter.
+Stable mode hashes the full record without its trailing newline or NUL delimiter. With `--delimiter` and `--field`, it hashes only the selected field while emitting the complete record. Records with the same selected value therefore receive the same sampling decision.
 
 ### Reservoir Sampling
 
@@ -107,6 +113,8 @@ With `-0` or `--nul`, records and emitted delimiters are NUL-separated instead.
 - `--count N`: keep up to a positive `N` records using reservoir sampling
 - `--stable`: use deterministic hash sampling with `--rate`
 - `--seed N`: seed random modes or stable hashing
+- `-d`, `--delimiter VALUE`: literal field delimiter for stable sampling
+- `-f`, `--field N`: 1-based field used for stable sampling
 - `-0`, `--nul`: read and write NUL-delimited records
 - `--version`, `-V`: print version information
 
@@ -116,6 +124,9 @@ Invalid combinations fail:
 - `--stable` with `--count`
 - a non-positive `--count`
 - neither `--rate` nor `--count`
+- field selection without `--stable`
+
+`--delimiter` and `--field` must be supplied together. The delimiter is literal, not a regular expression or CSV parser. Missing fields are input errors; empty fields are valid sampling keys.
 
 ## Exit Status
 

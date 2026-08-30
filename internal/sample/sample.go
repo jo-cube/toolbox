@@ -22,9 +22,13 @@ type Config struct {
 	Seed     int64
 	SeedSet  bool
 	NUL      bool
+	Fields   prob.FieldOptions
 }
 
 func Validate(cfg Config) error {
+	if err := cfg.Fields.Validate(); err != nil {
+		return err
+	}
 	hasRate := cfg.RateSet || cfg.Rate != 0
 	hasCount := cfg.CountSet || cfg.Count != 0
 	if hasRate == hasCount {
@@ -38,6 +42,9 @@ func Validate(cfg Config) error {
 	}
 	if cfg.Stable && hasCount {
 		return fmt.Errorf("--stable can only be used with --rate")
+	}
+	if cfg.Fields.Enabled() && !cfg.Stable {
+		return fmt.Errorf("--delimiter and --field can only be used with --stable")
 	}
 	return nil
 }
@@ -89,6 +96,10 @@ func rateStable(paths []string, cfg Config, out io.Writer, stdin io.Reader) erro
 			if delim == '\n' && len(key) > 0 && key[len(key)-1] == '\r' {
 				key = key[:len(key)-1]
 			}
+		}
+		key, err := cfg.Fields.Select(key)
+		if err != nil {
+			return err
 		}
 		if cfg.Rate >= 1 || prob.Hash64(key, uint64(cfg.Seed)) < threshold {
 			_, err := out.Write(record)

@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/jo-cube/toolbox/internal/prob"
 )
 
 const fourRecords = `a
@@ -37,6 +39,40 @@ func TestStableSampleIsRepeatable(t *testing.T) {
 	}
 	if a.String() != b.String() {
 		t.Fatalf("stable sample changed: %q != %q", a.String(), b.String())
+	}
+}
+
+func TestStableSampleCanHashOneFieldAndPreserveRecords(t *testing.T) {
+	t.Parallel()
+
+	records := []struct {
+		record string
+		key    string
+	}{
+		{"1\tgroup-a\tfirst\n", "group-a"},
+		{"2\tgroup-a\tsecond\n", "group-a"},
+		{"3\tgroup-b\tthird\n", "group-b"},
+		{"4\tgroup-c\tfourth\n", "group-c"},
+	}
+	cfg := Config{Rate: 0.5, Stable: true, Seed: 7, Fields: prob.FieldOptions{Delimiter: "\t", Field: 2}}
+	threshold := uint64(cfg.Rate * float64(math.MaxUint64))
+	var input, want strings.Builder
+	for _, record := range records {
+		input.WriteString(record.record)
+		if prob.Hash64([]byte(record.key), uint64(cfg.Seed)) < threshold {
+			want.WriteString(record.record)
+		}
+	}
+	if want.Len() == 0 || want.Len() == input.Len() {
+		t.Fatal("test keys do not exercise both sampling decisions")
+	}
+
+	var out bytes.Buffer
+	if err := RunFrom(nil, cfg, &out, strings.NewReader(input.String())); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != want.String() {
+		t.Fatalf("RunFrom() wrote %q, want %q", out.String(), want.String())
 	}
 }
 
@@ -125,6 +161,18 @@ func TestValidateRejectsAmbiguousMode(t *testing.T) {
 	}
 	if err := Validate(Config{Count: -1, CountSet: true}); err == nil || !strings.Contains(err.Error(), "positive") {
 		t.Fatalf("Validate() error = %v, want positive count error", err)
+	}
+}
+
+func TestValidateRestrictsFieldSelectionToStableRate(t *testing.T) {
+	t.Parallel()
+
+	fields := prob.FieldOptions{Delimiter: "\t", Field: 2}
+	if err := Validate(Config{Rate: 0.5, Fields: fields}); err == nil || !strings.Contains(err.Error(), "--stable") {
+		t.Fatalf("Validate() error = %v, want stable-mode error", err)
+	}
+	if err := Validate(Config{Rate: 0.5, Stable: true, Fields: prob.FieldOptions{Field: 2}}); err == nil || !strings.Contains(err.Error(), "--delimiter") {
+		t.Fatalf("Validate() error = %v, want delimiter error", err)
 	}
 }
 
