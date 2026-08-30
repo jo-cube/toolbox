@@ -37,9 +37,10 @@ Examples:
   card --json .user_id .event_type events.jsonl
 
 Notes:
-  CSV mode selects header names.
-  Delimited mode selects 1-based field numbers.
-  JSON paths are simple dot paths; filters and array traversal are not supported.
+	  CSV mode selects header names.
+	  Delimited mode selects 1-based field numbers.
+	  JSON paths are simple dot paths; filters and array traversal are not supported.
+	  Prefix relative JSON input files with ./ so they are not parsed as selectors.
 
 Options:
 `, name)
@@ -80,7 +81,7 @@ Options:
 	var paths []string
 	var jsonPaths []string
 	if mode == "json" {
-		for len(args) > 0 && strings.HasPrefix(args[0], ".") {
+		for len(args) > 0 && isJSONSelector(args[0]) {
 			jsonPaths = append(jsonPaths, args[0])
 			args = args[1:]
 		}
@@ -130,6 +131,10 @@ Options:
 		fmt.Fprintf(os.Stderr, "card: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func isJSONSelector(arg string) bool {
+	return strings.HasPrefix(arg, ".") && !strings.HasPrefix(arg, "./") && !strings.HasPrefix(arg, "../")
 }
 
 func splitList(raw string) []string {

@@ -43,6 +43,7 @@ EOF
 
 card --json .user_id .event_type .metadata.country /tmp/events.jsonl |
 	grep -q ".metadata.country" || fail "card json"
+cat /tmp/events.jsonl | card --json .user_id - | grep -q ".user_id" || fail "card stdin marker"
 card --output-json --json .user_id .event_type .metadata.country /tmp/events.jsonl |
 	jq -e '
 		length == 3 and
