@@ -84,17 +84,17 @@ Options:
 	}
 
 	if *tsvOut {
-		fmt.Fprintln(os.Stdout, "rank\tcount_estimate\titem")
+		fmt.Fprintln(os.Stdout, "rank\tcount_estimate\tcount_lower_bound\titem")
 		for _, result := range results {
-			fmt.Fprintf(os.Stdout, "%d\t%d\t%s\n", result.Rank, result.CountEstimate, result.Item)
+			fmt.Fprintf(os.Stdout, "%d\t%d\t%d\t%s\n", result.Rank, result.CountEstimate, result.CountLowerBound, result.Item)
 		}
 		return
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "rank\tcount_estimate\titem")
+	fmt.Fprintln(w, "rank\tcount_estimate\tcount_lower_bound\titem")
 	for _, result := range results {
-		fmt.Fprintf(w, "%d\t%d\t%s\n", result.Rank, result.CountEstimate, result.Item)
+		fmt.Fprintf(w, "%d\t%d\t%d\t%s\n", result.Rank, result.CountEstimate, result.CountLowerBound, result.Item)
 	}
 	if err := w.Flush(); err != nil {
 		fmt.Fprintf(os.Stderr, "heavy: %v\n", err)

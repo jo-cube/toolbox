@@ -36,7 +36,7 @@ func TestExactModeRanksByObservedCounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 || got[0].Item != "b" || got[0].CountEstimate != 3 || got[1].Item != "a" {
+	if len(got) != 2 || got[0].Item != "b" || got[0].CountEstimate != 3 || got[0].CountLowerBound != 3 || got[1].Item != "a" {
 		t.Fatalf("Run() = %#v", got)
 	}
 }
@@ -49,7 +49,7 @@ func TestApproximateKeepsHeavyItem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].Item != "x" {
+	if len(got) != 1 || got[0].Item != "x" || got[0].CountLowerBound > got[0].CountEstimate {
 		t.Fatalf("Run() = %#v, want x as top item", got)
 	}
 }
@@ -71,6 +71,9 @@ func TestApproximateHandlesHighCardinalityInput(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].Item != "heavy" {
 		t.Fatalf("Run() = %#v, want heavy as top item", got)
+	}
+	if got[0].CountLowerBound > 1_000 || got[0].CountEstimate < 1_000 {
+		t.Fatalf("heavy bounds = %d..%d, want to contain 1000", got[0].CountLowerBound, got[0].CountEstimate)
 	}
 }
 

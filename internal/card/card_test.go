@@ -1,6 +1,7 @@
 package card
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,6 +89,18 @@ func TestDelimitedColumnsAreOneBased(t *testing.T) {
 	}
 	if got[0].Field != "2" || got[0].ApproxUnique != 2 {
 		t.Fatalf("Run() = %#v", got)
+	}
+}
+
+func TestExplicitStdinPath(t *testing.T) {
+	t.Parallel()
+
+	got, err := RunFrom([]string{"-"}, Config{Mode: "json", JSONPaths: []string{".user_id"}, Precision: 8}, bytes.NewBufferString(jsonEvents))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].ApproxUnique != 2 {
+		t.Fatalf("profile = %#v", got[0])
 	}
 }
 

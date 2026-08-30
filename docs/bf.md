@@ -32,10 +32,11 @@ bf --version
 ## Synopsis
 
 ```sh
-bf build --expected-items <n> --false-positive-rate <p> [file...] > filter.bf
-bf test [--invert] <filter.bf> [file...]
-bf inspect [--json] <filter.bf>
-bf union <filter.bf> <filter.bf>... > combined.bf
+bf build --expected-items <n> --false-positive-rate <p> [--delimiter value --field n] [--no-size-limit] [file...] > filter.bf
+bf test [--invert] [--delimiter value --field n] [--no-size-limit] <filter.bf> [file...]
+bf dedupe --expected-items <n> --false-positive-rate <p> [--delimiter value --field n] [--no-size-limit] [file...]
+bf inspect [--json] [--no-size-limit] <filter.bf>
+bf union [--no-size-limit] <filter.bf> <filter.bf>... > combined.bf
 ```
 
 ## Commands
@@ -55,6 +56,15 @@ Required sizing flags:
 
 These flags are required because Bloom filter size and hash count depend on them. The tool does not guess production sizing.
 
+If the input contains more than `--expected-items` values, `bf build` writes a warning to stderr after consuming the stream. The binary filter remains the only stdout output.
+
+For literal-delimited records, build from one field without discarding the rest of the input schema:
+
+```sh
+bf build --expected-items 1000000 --false-positive-rate 0.001 \
+  -d $'\t' -f 2 events.tsv > users.bf
+```
+
 ### `bf test`
 
 Tests input values against a saved filter.
@@ -71,7 +81,32 @@ Invert mode emits values that are definitely absent:
 cat candidates.txt | bf test --invert users.bf
 ```
 
-`bf test` writes matching input values to stdout, one per line.
+`bf test` preserves the selected input delimiter: newline by default and NUL with `-0` or `--nul`.
+
+The filter and candidate stream may each use `-` for stdin, but not at the same time.
+
+Field selection tests one field and emits each complete matching record:
+
+```sh
+bf test -d $'\t' -f 2 users.bf candidates.tsv
+```
+
+### `bf dedupe`
+
+Emits the first probably unseen occurrence of each input value without writing a state file:
+
+```sh
+cat events.txt | bf dedupe --expected-items 1000000 --false-positive-rate 0.0001
+```
+
+It uses bounded memory, but a Bloom false positive can discard a value that has not appeared before. Use exact tools when dropping a unique value is unacceptable.
+
+The same field flags deduplicate by one field while preserving complete records:
+
+```sh
+bf dedupe --expected-items 1000000 --false-positive-rate 0.0001 \
+  -d $'\t' -f 2 events.tsv
+```
 
 ### `bf inspect`
 
@@ -89,7 +124,11 @@ version=1
 expected_items=1000000
 inserted_items=982341
 false_positive_rate=0.001
+estimated_false_positive_rate=0.0009102
 bit_count=14377588
+bitset_bytes=1797199
+set_bits=7110234
+fill_ratio=0.494526
 hash_count=10
 hash=fnv1a64-avalanche-v1
 ```
@@ -104,18 +143,23 @@ bf union service-a.bf service-b.bf > combined.bf
 
 All filters must have compatible bit count, hash count, false-positive rate, version, and hash metadata.
 
+`inspect` scans the bitset without loading it into memory. `union` keeps the first filter in memory and streams each later filter into it.
+
 ## Options
 
-Input options for `build` and `test`:
+Input options for `build`, `test`, and `dedupe`:
 
 - `--trim`: trim surrounding whitespace
 - `--ignore-empty`: skip empty items
 - `-0`, `--nul`: read NUL-delimited items
+- `-d`, `--delimiter VALUE`: literal delimiter between fields
+- `-f`, `--field N`: 1-based field inserted, tested, or deduplicated
 
 Command options:
 
-- `--expected-items N`: required by `build`
-- `--false-positive-rate P`: required by `build`
+- `--expected-items N`: required by `build` and `dedupe`
+- `--false-positive-rate P`: required by `build` and `dedupe`
+- `--no-size-limit`: allow filter bitsets larger than 2 GiB
 - `--invert`: emit definitely absent values in `test`
 - `--json`: write JSON output from `inspect`
 - `--version`, `-V`: print version information
@@ -131,13 +175,17 @@ Defaults:
 - empty lines are inserted or tested as a value
 - no structured parsing is performed
 
+`--delimiter` and `--field` must be supplied together. The delimiter is literal and may contain multiple bytes; it is not a regular expression or a CSV parser. A missing selected field is an input error, while an empty selected field is a value. With field selection, `--trim` and `--ignore-empty` apply to the selected field and output records remain complete. `-0` or `--nul` still controls record boundaries.
+
 ## Accuracy And Sizing
 
 Bloom filters trade memory for false-positive probability.
 
-If you insert more than `--expected-items`, the actual false-positive rate increases. If you need a lower false-positive rate, rebuild the filter with a lower `--false-positive-rate` value or a higher expected item count.
+If you insert more than `--expected-items`, the actual false-positive rate increases. `inspect` reports the set-bit count, fill ratio, and an estimated current false-positive rate derived from the bitset. If you need a lower false-positive rate, rebuild the filter with a lower `--false-positive-rate` value or a higher expected item count.
 
-`bf` limits a filter bitset to 512 MiB and at most 64 hashes per item. Sizing requests and state files outside those limits fail before allocation.
+`bf` limits a filter bitset to 2 GiB by default and at most 64 hashes per item. Sizing requests and state files outside those limits fail before allocation.
+
+`--no-size-limit` removes the 2 GiB application safeguard for any command that builds or reads a filter. It does not remove platform limits. Building, testing, and the first input to `union` still require the bitset to fit in memory; the operating system may terminate the process if memory is exhausted. The hash-count and state-file validation limits still apply.
 
 ## State Files
 
@@ -150,7 +198,7 @@ Current metadata:
 - hash: `fnv1a64-avalanche-v1`
 - bitset format: packed bits
 
-`bf` validates the header before reading the full payload. Unsupported versions, unsupported hash names, invalid bit counts, invalid hash counts, and invalid bitset sizes fail clearly.
+`bf` validates the header before reading the full payload. Unsupported versions, unsupported hash names, invalid bit counts, invalid hash counts, and invalid bitset sizes fail clearly. State-file arguments accept `-` for stdin; commands with multiple state inputs accept it at most once.
 
 ## Exit Status
 

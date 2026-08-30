@@ -192,6 +192,9 @@ Sketches must use compatible precision, register count, version, and hash metada
 	if fs.NArg() < 2 {
 		return fmt.Errorf("usage: hll merge <file> <file>...")
 	}
+	if countStdin(fs.Args()) > 1 {
+		return fmt.Errorf("usage: hll merge accepts stdin only once")
+	}
 
 	merged, err := readSketch(fs.Arg(0))
 	if err != nil {
@@ -247,12 +250,25 @@ Options:
 }
 
 func readSketch(path string) (*hll.Sketch, error) {
+	if path == "-" {
+		return hll.Read(os.Stdin)
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
 	defer f.Close()
 	return hll.Read(f)
+}
+
+func countStdin(paths []string) int {
+	count := 0
+	for _, path := range paths {
+		if path == "-" {
+			count++
+		}
+	}
+	return count
 }
 
 func writeEstimate(out *os.File, s *hll.Sketch, jsonOut bool) error {

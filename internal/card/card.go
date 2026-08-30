@@ -40,22 +40,27 @@ type counter struct {
 }
 
 func Run(paths []string, cfg Config) ([]Profile, error) {
+	return RunFrom(paths, cfg, os.Stdin)
+}
+
+// RunFrom uses stdin for an empty path list or an explicit "-" path.
+func RunFrom(paths []string, cfg Config, stdin io.Reader) ([]Profile, error) {
 	if cfg.Precision == 0 {
 		cfg.Precision = hll.DefaultP
 	}
 	switch cfg.Mode {
 	case "csv":
-		return runCSV(paths, cfg)
+		return runCSV(paths, cfg, stdin)
 	case "json":
-		return runJSON(paths, cfg)
+		return runJSON(paths, cfg, stdin)
 	case "delimiter":
-		return runDelimited(paths, cfg)
+		return runDelimited(paths, cfg, stdin)
 	default:
 		return nil, fmt.Errorf("choose one of --csv, --json, or --delimiter")
 	}
 }
 
-func runCSV(paths []string, cfg Config) ([]Profile, error) {
+func runCSV(paths []string, cfg Config, stdin io.Reader) ([]Profile, error) {
 	if len(cfg.Columns) == 0 {
 		return nil, fmt.Errorf("--columns is required in CSV mode")
 	}
@@ -63,7 +68,7 @@ func runCSV(paths []string, cfg Config) ([]Profile, error) {
 	if err != nil {
 		return nil, err
 	}
-	return finish(counters, eachPath(paths, func(name string, r io.Reader) error {
+	return finish(counters, eachPath(paths, stdin, func(name string, r io.Reader) error {
 		cr := csv.NewReader(r)
 		header, err := cr.Read()
 		if err != nil {
@@ -98,7 +103,7 @@ func runCSV(paths []string, cfg Config) ([]Profile, error) {
 	}))
 }
 
-func runDelimited(paths []string, cfg Config) ([]Profile, error) {
+func runDelimited(paths []string, cfg Config, stdin io.Reader) ([]Profile, error) {
 	if cfg.Delimiter == "" {
 		return nil, fmt.Errorf("--delimiter cannot be empty")
 	}
@@ -110,7 +115,7 @@ func runDelimited(paths []string, cfg Config) ([]Profile, error) {
 	if err != nil {
 		return nil, err
 	}
-	return finish(counters, eachLine(paths, func(line string) error {
+	return finish(counters, eachLine(paths, stdin, func(line string) error {
 		parts := strings.Split(line, cfg.Delimiter)
 		for i, idx := range indexes {
 			value, ok := recordValue(parts, idx)
@@ -120,7 +125,7 @@ func runDelimited(paths []string, cfg Config) ([]Profile, error) {
 	}))
 }
 
-func runJSON(paths []string, cfg Config) ([]Profile, error) {
+func runJSON(paths []string, cfg Config, stdin io.Reader) ([]Profile, error) {
 	if len(cfg.JSONPaths) == 0 {
 		return nil, fmt.Errorf("at least one JSON path is required")
 	}
@@ -135,7 +140,7 @@ func runJSON(paths []string, cfg Config) ([]Profile, error) {
 			return nil, fmt.Errorf("invalid JSON path %q", path)
 		}
 	}
-	return finish(counters, eachLine(paths, func(line string) error {
+	return finish(counters, eachLine(paths, stdin, func(line string) error {
 		var obj any
 		decoder := json.NewDecoder(strings.NewReader(line))
 		decoder.UseNumber()
@@ -274,11 +279,22 @@ func lookup(value any, path []string) (any, bool) {
 	return current, true
 }
 
-func eachPath(paths []string, fn func(string, io.Reader) error) error {
+func eachPath(paths []string, stdin io.Reader, fn func(string, io.Reader) error) error {
 	if len(paths) == 0 {
-		return fn("<stdin>", os.Stdin)
+		return fn("<stdin>", stdin)
 	}
+	stdinUsed := false
 	for _, path := range paths {
+		if path == "-" {
+			if stdinUsed {
+				return fmt.Errorf("stdin may be read only once")
+			}
+			stdinUsed = true
+			if err := fn("<stdin>", stdin); err != nil {
+				return err
+			}
+			continue
+		}
 		f, err := os.Open(path)
 		if err != nil {
 			return fmt.Errorf("open %s: %w", path, err)
@@ -295,8 +311,8 @@ func eachPath(paths []string, fn func(string, io.Reader) error) error {
 	return nil
 }
 
-func eachLine(paths []string, fn func(string) error) error {
-	return eachPath(paths, func(name string, r io.Reader) error {
+func eachLine(paths []string, stdin io.Reader, fn func(string) error) error {
+	return eachPath(paths, stdin, func(name string, r io.Reader) error {
 		br := bufio.NewReader(r)
 		line := 0
 		for {

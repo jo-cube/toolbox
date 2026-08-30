@@ -36,6 +36,8 @@ kshape render [--title text] [--metric name] <topic.kshape> > report.html
 kshape merge <a.kshape> <b.kshape>... > merged.kshape
 ```
 
+Artifact arguments accept `-` for stdin. A merge may read stdin at most once.
+
 ## Build from jkq
 
 `kshape format` prints the exact binary-safe `-f` expression expected by

@@ -128,6 +128,7 @@ Write commands:
 ## Input Format
 
 Keys, values, and prefixes can be plain text or raw bytes encoded as hex.
+Interactive command lines are limited to 1 MiB; reads and exports are not subject to that input-line limit.
 
 Examples:
 

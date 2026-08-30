@@ -15,11 +15,27 @@ type InputOptions struct {
 }
 
 func EachInput(paths []string, opts InputOptions, fn func([]byte) error) error {
+	return EachInputFrom(paths, os.Stdin, opts, fn)
+}
+
+// EachInputFrom reads stdin for an empty path list or an explicit "-" path.
+func EachInputFrom(paths []string, stdin io.Reader, opts InputOptions, fn func([]byte) error) error {
 	if len(paths) == 0 {
-		return eachReader("<stdin>", os.Stdin, opts, fn)
+		return eachReader("<stdin>", stdin, opts, fn)
 	}
 
+	stdinUsed := false
 	for _, path := range paths {
+		if path == "-" {
+			if stdinUsed {
+				return fmt.Errorf("stdin may be read only once")
+			}
+			stdinUsed = true
+			if err := eachReader("<stdin>", stdin, opts, fn); err != nil {
+				return err
+			}
+			continue
+		}
 		f, err := os.Open(path)
 		if err != nil {
 			return fmt.Errorf("open %s: %w", path, err)
@@ -43,8 +59,17 @@ func eachReader(name string, r io.Reader, opts InputOptions, fn func([]byte) err
 	}
 
 	br := bufio.NewReader(r)
+	var continued []byte
 	for {
-		item, err := br.ReadBytes(delim)
+		item, err := br.ReadSlice(delim)
+		if err == bufio.ErrBufferFull {
+			continued = append(continued, item...)
+			continue
+		}
+		if len(continued) != 0 {
+			item = append(continued, item...)
+			continued = nil
+		}
 		if len(item) > 0 {
 			if item[len(item)-1] == delim {
 				item = item[:len(item)-1]

@@ -24,6 +24,12 @@ They also accept file arguments:
 hll count values-a.txt values-b.txt
 ```
 
+Use `-` to place stdin among file arguments. Stdin may appear only once:
+
+```sh
+hll count historical.txt - < live-values.txt
+```
+
 For tools that use the shared stream reader, these flags are available:
 
 - `--trim`: trim surrounding whitespace before processing an item
@@ -38,7 +44,18 @@ Defaults are conservative:
 - whitespace is preserved unless `--trim` is set
 - empty lines are processed unless `--ignore-empty` is set
 
-`sample` is the exception: it preserves emitted records exactly, so it does not trim, skip, or reinterpret records.
+`sample` is the exception: it preserves emitted records exactly, so it does not trim or skip records. It supports newline and NUL delimiters.
+
+## Field Selection
+
+`bf build`, `bf test`, `bf dedupe`, and `sample --stable` can use one field from a literal-delimited record:
+
+```sh
+bf test -d $'\t' -f 2 users.bf events.tsv
+sample --rate 0.01 --stable -d $'\t' -f 2 events.tsv
+```
+
+`-d`/`--delimiter` and `-f`/`--field` must be supplied together. Fields are 1-based. `bf test`, `bf dedupe`, and `sample` emit complete records even though the selected field controls the decision. This is intentionally not CSV or JSON parsing; use an upstream parser when quoting or structured data matters.
 
 ## Output
 
@@ -83,6 +100,13 @@ State files are:
 
 Do not edit state files by hand. Use `hll inspect` or `bf inspect` to view metadata.
 
+State-file commands also accept `-` for stdin, which allows inspection or combination without a temporary file:
+
+```sh
+cat users.hll | hll inspect -
+cat shard.bf | bf union baseline.bf - > combined.bf
+```
+
 Compatibility rules:
 
 - HLL sketches can merge only when precision, register count, version, and hash metadata match.
@@ -99,3 +123,21 @@ zcat events.jsonl.gz | jq -r .user_id | hll count
 ```sh
 awk '{print $7}' access.log | heavy --top 20
 ```
+
+## Kafka Pipelines
+
+These tools consume byte streams; they do not manage Kafka connections, offsets, checkpoints, or delivery semantics. Commands that emit a final summary or reusable state complete only at EOF, so use a bounded snapshot for them. For example, `jkq --snapshot` or `kcat -e` can bound a topic read.
+
+Project each Kafka record to exactly one value before the operator. Newline-delimited output is convenient for text values. Use NUL-delimited output and `-0` when values may contain newlines; encode values first if they may contain NUL bytes.
+
+A typical window produces one artifact per partition or time range, then combines compatible artifacts:
+
+```sh
+consume-window-a | project-key | hll build > window-a.hll
+consume-window-b | project-key | hll build > window-b.hll
+hll merge window-a.hll window-b.hll > combined.hll
+```
+
+Use `bf union` for Bloom-filter windows. Keep the same precision for HLL inputs and the same sizing parameters for Bloom-filter inputs. `heavy` and `sample` have no mergeable state; run them on the combined input stream. `bf dedupe` is useful for bounded best-effort duplicate suppression, but Bloom false positives mean it is not appropriate when every unique record must be retained.
+
+For Kafka offset-shape analysis, use `kshape`; its canonical formatter preserves binary keys and Kafka metadata.

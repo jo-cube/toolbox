@@ -89,6 +89,12 @@ hll merge monday.hll tuesday.hll > week.hll
 
 All input sketches must use compatible precision, register count, file version, and hash metadata.
 
+State-file arguments accept `-` for stdin. A merge may read stdin at most once:
+
+```sh
+cat monday.hll | hll merge - tuesday.hll > week.hll
+```
+
 ### `hll inspect`
 
 Prints sketch metadata.

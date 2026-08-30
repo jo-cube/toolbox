@@ -73,6 +73,12 @@ card --json .user_id .event_type .metadata.country events.jsonl
 
 JSON paths are simple object paths. They do not support filters, expressions, array traversal, or escaping.
 
+Because selectors start with `.`, use `./file.jsonl` for a relative input path that could otherwise look like a selector:
+
+```sh
+card --json .user_id ./events.jsonl
+```
+
 ## Output
 
 Default output is tabular:
