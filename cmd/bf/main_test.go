@@ -40,6 +40,43 @@ func TestDedupeEmitsFirstProbablyUnseenItem(t *testing.T) {
 	}
 }
 
+func TestFieldSelectionBuildsTestsAndDeduplicatesByField(t *testing.T) {
+	t.Parallel()
+
+	var built, errOut bytes.Buffer
+	buildInput := "1\talice\tcreated\n2\tbob\tcreated\n"
+	if err := build([]string{"--expected-items", "100", "--false-positive-rate", "0.000001", "-d", "\t", "-f", "2"}, bytes.NewBufferString(buildInput), &built, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	f, err := internalbf.Read(bytes.NewReader(built.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !f.Test([]byte("alice")) || !f.Test([]byte("bob")) || f.Test([]byte("1\talice\tcreated")) {
+		t.Fatal("build did not hash only the selected field")
+	}
+
+	path := writeFilter(t, "fields.bf", f)
+	var tested bytes.Buffer
+	testInput := "3\t alice \tlogin\n4\tcarol\tlogin\n5\tbob\tlogout\n"
+	if err := test([]string{"--trim", "--delimiter", "\t", "--field", "2", path}, bytes.NewBufferString(testInput), &tested); err != nil {
+		t.Fatal(err)
+	}
+	if want := "3\t alice \tlogin\n5\tbob\tlogout\n"; tested.String() != want {
+		t.Fatalf("test output = %q, want %q", tested.String(), want)
+	}
+
+	var deduped bytes.Buffer
+	dedupeInput := "1\ta\n2\tb\n3\ta\n"
+	err = dedupe([]string{"--expected-items", "100", "--false-positive-rate", "0.000001", "-d", "\t", "-f", "2"}, bytes.NewBufferString(dedupeInput), &deduped, &errOut)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "1\ta\n2\tb\n"; deduped.String() != want {
+		t.Fatalf("dedupe output = %q, want %q", deduped.String(), want)
+	}
+}
+
 func TestBuildWarnsWhenExpectedItemsAreExceeded(t *testing.T) {
 	t.Parallel()
 

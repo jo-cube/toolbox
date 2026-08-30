@@ -32,9 +32,9 @@ bf --version
 ## Synopsis
 
 ```sh
-bf build --expected-items <n> --false-positive-rate <p> [--no-size-limit] [file...] > filter.bf
-bf test [--invert] [--no-size-limit] <filter.bf> [file...]
-bf dedupe --expected-items <n> --false-positive-rate <p> [--no-size-limit] [file...]
+bf build --expected-items <n> --false-positive-rate <p> [--delimiter value --field n] [--no-size-limit] [file...] > filter.bf
+bf test [--invert] [--delimiter value --field n] [--no-size-limit] <filter.bf> [file...]
+bf dedupe --expected-items <n> --false-positive-rate <p> [--delimiter value --field n] [--no-size-limit] [file...]
 bf inspect [--json] [--no-size-limit] <filter.bf>
 bf union [--no-size-limit] <filter.bf> <filter.bf>... > combined.bf
 ```
@@ -58,6 +58,13 @@ These flags are required because Bloom filter size and hash count depend on them
 
 If the input contains more than `--expected-items` values, `bf build` writes a warning to stderr after consuming the stream. The binary filter remains the only stdout output.
 
+For literal-delimited records, build from one field without discarding the rest of the input schema:
+
+```sh
+bf build --expected-items 1000000 --false-positive-rate 0.001 \
+  -d $'\t' -f 2 events.tsv > users.bf
+```
+
 ### `bf test`
 
 Tests input values against a saved filter.
@@ -78,6 +85,12 @@ cat candidates.txt | bf test --invert users.bf
 
 The filter and candidate stream may each use `-` for stdin, but not at the same time.
 
+Field selection tests one field and emits each complete matching record:
+
+```sh
+bf test -d $'\t' -f 2 users.bf candidates.tsv
+```
+
 ### `bf dedupe`
 
 Emits the first probably unseen occurrence of each input value without writing a state file:
@@ -87,6 +100,13 @@ cat events.txt | bf dedupe --expected-items 1000000 --false-positive-rate 0.0001
 ```
 
 It uses bounded memory, but a Bloom false positive can discard a value that has not appeared before. Use exact tools when dropping a unique value is unacceptable.
+
+The same field flags deduplicate by one field while preserving complete records:
+
+```sh
+bf dedupe --expected-items 1000000 --false-positive-rate 0.0001 \
+  -d $'\t' -f 2 events.tsv
+```
 
 ### `bf inspect`
 
@@ -132,6 +152,8 @@ Input options for `build`, `test`, and `dedupe`:
 - `--trim`: trim surrounding whitespace
 - `--ignore-empty`: skip empty items
 - `-0`, `--nul`: read NUL-delimited items
+- `-d`, `--delimiter VALUE`: literal delimiter between fields
+- `-f`, `--field N`: 1-based field inserted, tested, or deduplicated
 
 Command options:
 
@@ -152,6 +174,8 @@ Defaults:
 - surrounding whitespace is preserved
 - empty lines are inserted or tested as a value
 - no structured parsing is performed
+
+`--delimiter` and `--field` must be supplied together. The delimiter is literal and may contain multiple bytes; it is not a regular expression or a CSV parser. A missing selected field is an input error, while an empty selected field is a value. With field selection, `--trim` and `--ignore-empty` apply to the selected field and output records remain complete. `-0` or `--nul` still controls record boundaries.
 
 ## Accuracy And Sizing
 

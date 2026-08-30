@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -87,11 +88,14 @@ func build(args []string, in io.Reader, out, errOut io.Writer) error {
 	noSizeLimit := addSizeLimitFlag(fs)
 	var input prob.InputOptions
 	prob.AddInputFlags(fs, &input)
+	var fields prob.FieldOptions
+	prob.AddFieldFlags(fs, &fields)
 	fs.Usage = func() {
-		fmt.Fprint(fs.Output(), `Usage: bf build --expected-items <n> --false-positive-rate <p> [--no-size-limit] [file...] > filter.bf
+		fmt.Fprint(fs.Output(), `Usage: bf build --expected-items <n> --false-positive-rate <p> [--delimiter value --field n] [--no-size-limit] [file...] > filter.bf
 
 Read values from files or stdin and write a binary Bloom filter to stdout.
 Sizing flags are required because they determine memory use and false-positive behavior.
+With field selection, only that field is inserted.
 
 Options:
 `)
@@ -100,12 +104,15 @@ Options:
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if err := fields.Validate(); err != nil {
+		return fmt.Errorf("usage: %w", err)
+	}
 
 	f, err := bf.NewWithLimit(*expected, *rate, filterSizeLimit(*noSizeLimit))
 	if err != nil {
 		return err
 	}
-	if err := prob.EachInputFrom(fs.Args(), in, input, func(item []byte) error {
+	if err := eachSelectedInput(fs.Args(), in, input, fields, func(item, _ []byte) error {
 		f.Add(item)
 		return nil
 	}); err != nil {
@@ -123,12 +130,15 @@ func test(args []string, in io.Reader, out io.Writer) error {
 	noSizeLimit := addSizeLimitFlag(fs)
 	var input prob.InputOptions
 	prob.AddInputFlags(fs, &input)
+	var fields prob.FieldOptions
+	prob.AddFieldFlags(fs, &fields)
 	fs.Usage = func() {
-		fmt.Fprint(fs.Output(), `Usage: bf test [--invert] [--no-size-limit] <filter.bf> [file...]
+		fmt.Fprint(fs.Output(), `Usage: bf test [--invert] [--delimiter value --field n] [--no-size-limit] <filter.bf> [file...]
 
 Read candidates from files or stdin.
 Default output is values probably present in the filter.
 With --invert, output is values definitely absent from the filter.
+With field selection, test that field and emit the complete record.
 
 Options:
 `)
@@ -136,6 +146,9 @@ Options:
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if err := fields.Validate(); err != nil {
+		return fmt.Errorf("usage: %w", err)
 	}
 	if fs.NArg() < 1 {
 		return fmt.Errorf("usage: bf test [--invert] [--no-size-limit] <filter> [file...]")
@@ -154,10 +167,10 @@ Options:
 		return err
 	}
 	buffered := bufio.NewWriter(out)
-	err = prob.EachInputFrom(paths, in, input, func(item []byte) error {
+	err = eachSelectedInput(paths, in, input, fields, func(item, output []byte) error {
 		present := f.Test(item)
 		if present != *invert {
-			return writeItem(buffered, item, input.NUL)
+			return writeItem(buffered, output, input.NUL)
 		}
 		return nil
 	})
@@ -172,11 +185,14 @@ func dedupe(args []string, in io.Reader, out, errOut io.Writer) error {
 	noSizeLimit := addSizeLimitFlag(fs)
 	var input prob.InputOptions
 	prob.AddInputFlags(fs, &input)
+	var fields prob.FieldOptions
+	prob.AddFieldFlags(fs, &fields)
 	fs.Usage = func() {
-		fmt.Fprint(fs.Output(), `Usage: bf dedupe --expected-items <n> --false-positive-rate <p> [--no-size-limit] [file...]
+		fmt.Fprint(fs.Output(), `Usage: bf dedupe --expected-items <n> --false-positive-rate <p> [--delimiter value --field n] [--no-size-limit] [file...]
 
 Emit the first probably unseen occurrence of each value. False positives can
 discard values that have not appeared before.
+With field selection, deduplicate by that field and emit the complete record.
 
 Options:
 `)
@@ -185,17 +201,20 @@ Options:
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if err := fields.Validate(); err != nil {
+		return fmt.Errorf("usage: %w", err)
+	}
 	f, err := bf.NewWithLimit(*expected, *rate, filterSizeLimit(*noSizeLimit))
 	if err != nil {
 		return err
 	}
 	buffered := bufio.NewWriter(out)
-	err = prob.EachInputFrom(fs.Args(), in, input, func(item []byte) error {
+	err = eachSelectedInput(fs.Args(), in, input, fields, func(item, output []byte) error {
 		if f.Test(item) {
 			return nil
 		}
 		f.Add(item)
-		return writeItem(buffered, item, input.NUL)
+		return writeItem(buffered, output, input.NUL)
 	})
 	if err = flush(buffered, err); err != nil {
 		return err
@@ -338,6 +357,27 @@ func countStdin(paths []string) int {
 		}
 	}
 	return count
+}
+
+func eachSelectedInput(paths []string, in io.Reader, input prob.InputOptions, fields prob.FieldOptions, fn func(item, output []byte) error) error {
+	rawInput := prob.InputOptions{NUL: input.NUL}
+	return prob.EachInputFrom(paths, in, rawInput, func(record []byte) error {
+		item, err := fields.Select(record)
+		if err != nil {
+			return err
+		}
+		if input.Trim {
+			item = bytes.TrimSpace(item)
+		}
+		if input.IgnoreEmpty && len(item) == 0 {
+			return nil
+		}
+		output := item
+		if fields.Enabled() {
+			output = record
+		}
+		return fn(item, output)
+	})
 }
 
 func writeItem(out *bufio.Writer, item []byte, nul bool) error {
