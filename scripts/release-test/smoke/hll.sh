@@ -22,7 +22,7 @@ hll count -0 --json /tmp/hll-nul.txt |
 hll build /tmp/hll-values.txt > /tmp/a.hll
 seq 501 1500 | hll build > /tmp/b.hll
 hll merge /tmp/a.hll /tmp/b.hll > /tmp/merged.hll
-hll inspect /tmp/merged.hll | grep -q "type=hyperloglog" || fail "hll inspect"
+cat /tmp/merged.hll | hll inspect - | grep -q "type=hyperloglog" || fail "hll inspect stdin"
 hll inspect --json /tmp/merged.hll |
 	jq -e '.type == "hyperloglog" and .hash == "fnv1a64-avalanche-v1"' >/dev/null ||
 	fail "hll inspect json"

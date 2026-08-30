@@ -12,7 +12,7 @@ printf 'events\t1\t5\t200\t0\t-1\t\n' |
 	kshape build --bucket-width 4 --precision 8 > /tmp/b.kshape
 
 kshape merge /tmp/a.kshape /tmp/b.kshape > /tmp/merged.kshape
-kshape inspect /tmp/merged.kshape | grep -q 'type=kafka-retained-log-shape' ||
+cat /tmp/merged.kshape | kshape inspect - | grep -q 'type=kafka-retained-log-shape' ||
 	fail "kshape inspect"
 kshape inspect --json --bucket-width 8 /tmp/merged.kshape |
 	jq -e '.topic == "events" and (.partitions | length) == 2 and .partitions[0].regions[0].observed_tombstones == 1' >/dev/null ||

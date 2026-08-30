@@ -44,13 +44,13 @@ func run(args []string, in io.Reader, out, errOut io.Writer) int {
 	case "build":
 		err = build(args[1:], in, out, errOut)
 	case "inspect":
-		err = inspect(args[1:], out, errOut)
+		err = inspect(args[1:], in, out, errOut)
 	case "show":
-		err = show(args[1:], out, errOut)
+		err = show(args[1:], in, out, errOut)
 	case "render":
-		err = render(args[1:], out, errOut)
+		err = render(args[1:], in, out, errOut)
 	case "merge":
-		err = merge(args[1:], out, errOut)
+		err = merge(args[1:], in, out, errOut)
 	default:
 		usage(errOut)
 		return 2
@@ -138,7 +138,7 @@ Options:
 	return kshape.Write(out, summary)
 }
 
-func inspect(args []string, out, errOut io.Writer) error {
+func inspect(args []string, in io.Reader, out, errOut io.Writer) error {
 	fs := flag.NewFlagSet("kshape inspect", flag.ContinueOnError)
 	fs.SetOutput(errOut)
 	jsonOut := fs.Bool("json", false, "write JSON output")
@@ -159,7 +159,7 @@ Options:
 	if fs.NArg() != 1 {
 		return usageError("usage: kshape inspect [options] <file>")
 	}
-	summary, err := readSummary(fs.Arg(0))
+	summary, err := readSummary(fs.Arg(0), in)
 	if err != nil {
 		return err
 	}
@@ -173,7 +173,7 @@ Options:
 	return writeReport(out, report)
 }
 
-func show(args []string, out, errOut io.Writer) error {
+func show(args []string, in io.Reader, out, errOut io.Writer) error {
 	if len(args) == 1 && (args[0] == "-h" || args[0] == "--help") {
 		fmt.Fprint(errOut, `Usage: kshape show <file.kshape>
 
@@ -185,14 +185,14 @@ offset span. Output is identical on terminals and when redirected.
 	if len(args) != 1 {
 		return usageError("usage: kshape show <file.kshape>")
 	}
-	summary, err := readSummary(args[0])
+	summary, err := readSummary(args[0], in)
 	if err != nil {
 		return err
 	}
 	return kshape.Show(out, summary)
 }
 
-func render(args []string, out, errOut io.Writer) error {
+func render(args []string, in io.Reader, out, errOut io.Writer) error {
 	fs := flag.NewFlagSet("kshape render", flag.ContinueOnError)
 	fs.SetOutput(errOut)
 	title := fs.String("title", "", "report title; defaults to the topic identity")
@@ -215,14 +215,14 @@ Options:
 	if !kshape.ValidRenderMetric(*metric) {
 		return usageError("render metric must be density, churn, tombstones, or payload")
 	}
-	summary, err := readSummary(fs.Arg(0))
+	summary, err := readSummary(fs.Arg(0), in)
 	if err != nil {
 		return err
 	}
 	return kshape.Render(out, summary, *title, *metric)
 }
 
-func merge(args []string, out, errOut io.Writer) error {
+func merge(args []string, in io.Reader, out, errOut io.Writer) error {
 	fs := flag.NewFlagSet("kshape merge", flag.ContinueOnError)
 	fs.SetOutput(errOut)
 	fs.Usage = func() {
@@ -238,12 +238,15 @@ Observed offset coverage within the same finest bucket must not overlap.
 	if fs.NArg() < 2 {
 		return usageError("usage: kshape merge <file> <file>...")
 	}
-	merged, err := readSummary(fs.Arg(0))
+	if countStdin(fs.Args()) > 1 {
+		return usageError("kshape merge accepts stdin only once")
+	}
+	merged, err := readSummary(fs.Arg(0), in)
 	if err != nil {
 		return err
 	}
 	for _, path := range fs.Args()[1:] {
-		next, err := readSummary(path)
+		next, err := readSummary(path, in)
 		if err != nil {
 			return err
 		}
@@ -264,7 +267,14 @@ func parseFlags(fs *flag.FlagSet, args []string) error {
 	return nil
 }
 
-func readSummary(path string) (*kshape.Summary, error) {
+func readSummary(path string, stdin io.Reader) (*kshape.Summary, error) {
+	if path == "-" {
+		summary, err := kshape.Read(stdin)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+		return summary, nil
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
@@ -275,6 +285,16 @@ func readSummary(path string) (*kshape.Summary, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	return summary, nil
+}
+
+func countStdin(paths []string) int {
+	count := 0
+	for _, path := range paths {
+		if path == "-" {
+			count++
+		}
+	}
+	return count
 }
 
 func writeReport(out io.Writer, report kshape.Report) error {

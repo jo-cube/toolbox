@@ -115,6 +115,23 @@ func TestRunExitStatuses(t *testing.T) {
 	}
 }
 
+func TestStateCommandsAcceptStdinMarker(t *testing.T) {
+	t.Parallel()
+
+	artifact := runBuild(t, formattedRecord(0, 1, []byte("a")))
+	var out, errOut bytes.Buffer
+	if status := run([]string{"inspect", "--json", "-"}, bytes.NewReader(artifact), &out, &errOut); status != 0 {
+		t.Fatalf("inspect status = %d, stderr = %s", status, errOut.String())
+	}
+	var report kshape.Report
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Topic != "events" {
+		t.Fatalf("report topic = %q", report.Topic)
+	}
+}
+
 func runBuild(t *testing.T, input []byte) []byte {
 	t.Helper()
 	var out, errOut bytes.Buffer
