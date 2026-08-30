@@ -194,8 +194,8 @@ Notes:
 
 Warnings are printed when a requested offset is outside the available range.
 
-- If the requested offset is below the low watermark, the consumer will start from the earliest available data.
-- If the requested offset is above the high watermark, the consumer will wait for new messages.
+- If the requested offset is below the low watermark or above the high watermark,
+  the consumer's out-of-range behavior depends on its `auto.offset.reset` policy.
 - If a timestamp is after the last message in a partition, `ksetoff` uses that partition's high watermark.
 
 Automation behavior:

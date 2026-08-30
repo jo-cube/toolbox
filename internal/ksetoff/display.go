@@ -65,13 +65,13 @@ func WriteWarnings(w io.Writer, rows []PlanRow) (bool, error) {
 	for _, row := range rows {
 		if row.NewOffset < row.LowWatermark {
 			hasWarnings = true
-			if _, err := fmt.Fprintf(w, "  warning: partition %d: offset %d < low watermark %d (will consume from earliest available)\n", row.Partition, row.NewOffset, row.LowWatermark); err != nil {
+			if _, err := fmt.Fprintf(w, "  warning: partition %d: offset %d < low watermark %d (consumer behavior depends on auto.offset.reset)\n", row.Partition, row.NewOffset, row.LowWatermark); err != nil {
 				return hasWarnings, err
 			}
 		}
 		if row.NewOffset > row.HighWatermark {
 			hasWarnings = true
-			if _, err := fmt.Fprintf(w, "  warning: partition %d: offset %d > high watermark %d (consumer will wait for new messages)\n", row.Partition, row.NewOffset, row.HighWatermark); err != nil {
+			if _, err := fmt.Fprintf(w, "  warning: partition %d: offset %d > high watermark %d (consumer behavior depends on auto.offset.reset)\n", row.Partition, row.NewOffset, row.HighWatermark); err != nil {
 				return hasWarnings, err
 			}
 		}
