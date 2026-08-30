@@ -32,10 +32,10 @@ bf --version
 ## Synopsis
 
 ```sh
-bf build --expected-items <n> --false-positive-rate <p> [file...] > filter.bf
-bf test [--invert] <filter.bf> [file...]
-bf inspect [--json] <filter.bf>
-bf union <filter.bf> <filter.bf>... > combined.bf
+bf build --expected-items <n> --false-positive-rate <p> [--no-size-limit] [file...] > filter.bf
+bf test [--invert] [--no-size-limit] <filter.bf> [file...]
+bf inspect [--json] [--no-size-limit] <filter.bf>
+bf union [--no-size-limit] <filter.bf> <filter.bf>... > combined.bf
 ```
 
 ## Commands
@@ -116,6 +116,7 @@ Command options:
 
 - `--expected-items N`: required by `build`
 - `--false-positive-rate P`: required by `build`
+- `--no-size-limit`: allow filter bitsets larger than 2 GiB
 - `--invert`: emit definitely absent values in `test`
 - `--json`: write JSON output from `inspect`
 - `--version`, `-V`: print version information
@@ -137,7 +138,9 @@ Bloom filters trade memory for false-positive probability.
 
 If you insert more than `--expected-items`, the actual false-positive rate increases. If you need a lower false-positive rate, rebuild the filter with a lower `--false-positive-rate` value or a higher expected item count.
 
-`bf` limits a filter bitset to 512 MiB and at most 64 hashes per item. Sizing requests and state files outside those limits fail before allocation.
+`bf` limits a filter bitset to 2 GiB by default and at most 64 hashes per item. Sizing requests and state files outside those limits fail before allocation.
+
+`--no-size-limit` removes the 2 GiB application safeguard for any command that builds or reads a filter. It does not remove platform limits: the whole bitset must still fit in memory and the operating system may terminate the process if memory is exhausted. The hash-count and state-file validation limits still apply.
 
 ## State Files
 

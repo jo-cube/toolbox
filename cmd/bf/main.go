@@ -78,10 +78,11 @@ func build(args []string) error {
 	fs := flag.NewFlagSet("bf build", flag.ExitOnError)
 	expected := fs.Uint64("expected-items", 0, "expected number of inserted items")
 	rate := fs.Float64("false-positive-rate", 0, "target false-positive rate")
+	noSizeLimit := addSizeLimitFlag(fs)
 	var input prob.InputOptions
 	prob.AddInputFlags(fs, &input)
 	fs.Usage = func() {
-		fmt.Fprint(fs.Output(), `Usage: bf build --expected-items <n> --false-positive-rate <p> [file...] > filter.bf
+		fmt.Fprint(fs.Output(), `Usage: bf build --expected-items <n> --false-positive-rate <p> [--no-size-limit] [file...] > filter.bf
 
 Read values from files or stdin and write a binary Bloom filter to stdout.
 Sizing flags are required because they determine memory use and false-positive behavior.
@@ -94,7 +95,7 @@ Options:
 		return err
 	}
 
-	f, err := bf.New(*expected, *rate)
+	f, err := bf.NewWithLimit(*expected, *rate, filterSizeLimit(*noSizeLimit))
 	if err != nil {
 		return err
 	}
@@ -110,10 +111,11 @@ Options:
 func test(args []string) error {
 	fs := flag.NewFlagSet("bf test", flag.ExitOnError)
 	invert := fs.Bool("invert", false, "emit definitely absent items")
+	noSizeLimit := addSizeLimitFlag(fs)
 	var input prob.InputOptions
 	prob.AddInputFlags(fs, &input)
 	fs.Usage = func() {
-		fmt.Fprint(fs.Output(), `Usage: bf test [--invert] <filter.bf> [file...]
+		fmt.Fprint(fs.Output(), `Usage: bf test [--invert] [--no-size-limit] <filter.bf> [file...]
 
 Read candidates from files or stdin.
 Default output is values probably present in the filter.
@@ -127,10 +129,10 @@ Options:
 		return err
 	}
 	if fs.NArg() < 1 {
-		return fmt.Errorf("usage: bf test [--invert] <filter> [file...]")
+		return fmt.Errorf("usage: bf test [--invert] [--no-size-limit] <filter> [file...]")
 	}
 
-	f, err := readFilter(fs.Arg(0))
+	f, err := readFilter(fs.Arg(0), filterSizeLimit(*noSizeLimit))
 	if err != nil {
 		return err
 	}
@@ -147,8 +149,9 @@ Options:
 func inspect(args []string) error {
 	fs := flag.NewFlagSet("bf inspect", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "write JSON output")
+	noSizeLimit := addSizeLimitFlag(fs)
 	fs.Usage = func() {
-		fmt.Fprint(fs.Output(), `Usage: bf inspect [--json] <filter.bf>
+		fmt.Fprint(fs.Output(), `Usage: bf inspect [--json] [--no-size-limit] <filter.bf>
 
 Print Bloom filter metadata, including expected items, inserted items, bit count, and hash count.
 
@@ -160,10 +163,10 @@ Options:
 		return err
 	}
 	if fs.NArg() != 1 {
-		return fmt.Errorf("usage: bf inspect <filter>")
+		return fmt.Errorf("usage: bf inspect [--json] [--no-size-limit] <filter>")
 	}
 
-	f, err := readFilter(fs.Arg(0))
+	f, err := readFilter(fs.Arg(0), filterSizeLimit(*noSizeLimit))
 	if err != nil {
 		return err
 	}
@@ -184,26 +187,31 @@ Options:
 
 func union(args []string) error {
 	fs := flag.NewFlagSet("bf union", flag.ExitOnError)
+	noSizeLimit := addSizeLimitFlag(fs)
 	fs.Usage = func() {
-		fmt.Fprint(fs.Output(), `Usage: bf union <filter.bf> <filter.bf>... > combined.bf
+		fmt.Fprint(fs.Output(), `Usage: bf union [--no-size-limit] <filter.bf> <filter.bf>... > combined.bf
 
 Union compatible Bloom filters and write a binary filter to stdout.
 Filters must have compatible bit count, hash count, false-positive rate, version, and hash metadata.
+
+Options:
 `)
+		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() < 2 {
-		return fmt.Errorf("usage: bf union <filter> <filter>...")
+		return fmt.Errorf("usage: bf union [--no-size-limit] <filter> <filter>...")
 	}
 
-	merged, err := readFilter(fs.Arg(0))
+	limit := filterSizeLimit(*noSizeLimit)
+	merged, err := readFilter(fs.Arg(0), limit)
 	if err != nil {
 		return err
 	}
 	for _, path := range fs.Args()[1:] {
-		f, err := readFilter(path)
+		f, err := readFilter(path, limit)
 		if err != nil {
 			return err
 		}
@@ -214,11 +222,22 @@ Filters must have compatible bit count, hash count, false-positive rate, version
 	return bf.Write(os.Stdout, merged)
 }
 
-func readFilter(path string) (*bf.Filter, error) {
+func addSizeLimitFlag(fs *flag.FlagSet) *bool {
+	return fs.Bool("no-size-limit", false, "allow filter bitsets larger than 2 GiB")
+}
+
+func filterSizeLimit(disabled bool) uint64 {
+	if disabled {
+		return 0
+	}
+	return bf.DefaultMaxBytes
+}
+
+func readFilter(path string, maxBytes uint64) (*bf.Filter, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
 	defer f.Close()
-	return bf.Read(f)
+	return bf.ReadWithLimit(f, maxBytes)
 }
