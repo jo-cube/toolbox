@@ -53,6 +53,31 @@ func TestReservoirCount(t *testing.T) {
 	}
 }
 
+func TestReservoirPreservesInputOrder(t *testing.T) {
+	t.Parallel()
+
+	var input strings.Builder
+	for i := range 100 {
+		fmt.Fprintln(&input, i)
+	}
+	path := writeInput(t, input.String())
+	var out bytes.Buffer
+	if err := Run([]string{path}, Config{Count: 20, Seed: 1}, &out); err != nil {
+		t.Fatal(err)
+	}
+	previous := -1
+	for _, line := range strings.Fields(out.String()) {
+		value, err := strconv.Atoi(line)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if value <= previous {
+			t.Fatalf("reservoir output is not in input order: %q", out.String())
+		}
+		previous = value
+	}
+}
+
 func TestRateZeroIsValidAndEmitsNothing(t *testing.T) {
 	t.Parallel()
 
@@ -144,6 +169,19 @@ func TestStableSampleTreatsLFAndCRLFAsTheSameRecords(t *testing.T) {
 	}
 	if got := strings.ReplaceAll(crlfOut.String(), "\r\n", "\n"); got != lfOut.String() {
 		t.Fatal("stable selection changed between LF and CRLF input")
+	}
+}
+
+func TestNULSamplingPreservesDelimiter(t *testing.T) {
+	t.Parallel()
+
+	input := []byte("a\x00b\x00")
+	var out bytes.Buffer
+	if err := RunFrom([]string{"-"}, Config{Rate: 1, NUL: true}, &out, bytes.NewReader(input)); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(out.Bytes(), input) {
+		t.Fatalf("RunFrom() wrote %q, want %q", out.Bytes(), input)
 	}
 }
 

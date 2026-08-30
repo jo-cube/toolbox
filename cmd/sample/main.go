@@ -18,6 +18,8 @@ func main() {
 	count := flag.Int("count", 0, "reservoir sample size")
 	stable := flag.Bool("stable", false, "use deterministic hash sampling with --rate")
 	seed := flag.Int64("seed", 0, "random or stable hash seed")
+	nul := flag.Bool("nul", false, "read and write NUL-delimited records")
+	flag.BoolVar(nul, "0", false, "read and write NUL-delimited records")
 
 	flag.Usage = func() {
 		name := filepath.Base(os.Args[0])
@@ -32,9 +34,10 @@ Examples:
   sample --count 10000 huge-file.txt
 
 Notes:
-  --rate samples each record independently unless --stable is set.
-  --stable hashes the full record without a trailing newline.
-  --count uses reservoir sampling and writes selected records after reading input.
+	  --rate samples each record independently unless --stable is set.
+	  --stable hashes the full record without its trailing delimiter.
+	  -0 and --nul preserve NUL-delimited records instead of newline-delimited records.
+	  --count uses reservoir sampling and writes selected records after reading input.
 
 Options:
 `, name)
@@ -59,6 +62,7 @@ Options:
 		Stable:   *stable,
 		Seed:     *seed,
 		SeedSet:  flagWasSet("seed"),
+		NUL:      *nul,
 	}
 	if err := sample.Validate(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "sample: %v\n", err)

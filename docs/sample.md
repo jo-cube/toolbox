@@ -31,8 +31,8 @@ sample --version
 ## Synopsis
 
 ```sh
-sample --rate <p> [--stable] [--seed n] [file...]
-sample --count <n> [--seed n] [file...]
+sample --rate <p> [--stable] [--seed n] [-0] [file...]
+sample --count <n> [--seed n] [-0] [file...]
 ```
 
 Exactly one of `--rate` or `--count` is required.
@@ -79,13 +79,14 @@ Without `--seed`, random mode uses the current time as the seed.
 
 The same input record, rate, and seed produce the same decision across runs.
 
-Stable mode hashes the full record without a trailing newline.
+Stable mode hashes the full record without its trailing newline or NUL delimiter.
 
 ### Reservoir Sampling
 
 `--count N` keeps up to `N` records from the stream without knowing the stream length in advance.
 
 Reservoir mode stores the selected records in memory and writes them after input is consumed.
+Selected records are emitted in their original input order.
 
 ## Output
 
@@ -98,12 +99,15 @@ It does not:
 - parse JSON
 - add a missing trailing newline
 
+With `-0` or `--nul`, records and emitted delimiters are NUL-separated instead.
+
 ## Options
 
 - `--rate P`: sample each record with probability `P`, from `0` to `1`
 - `--count N`: keep up to a positive `N` records using reservoir sampling
 - `--stable`: use deterministic hash sampling with `--rate`
 - `--seed N`: seed random modes or stable hashing
+- `-0`, `--nul`: read and write NUL-delimited records
 - `--version`, `-V`: print version information
 
 Invalid combinations fail:

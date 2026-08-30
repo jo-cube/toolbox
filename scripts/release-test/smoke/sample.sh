@@ -18,14 +18,16 @@ sample --rate 0.2 --seed 7 /tmp/sample-values.txt > /tmp/sample-random-a.out
 sample --rate 0.2 --seed 7 /tmp/sample-values.txt > /tmp/sample-random-b.out
 cmp /tmp/sample-random-a.out /tmp/sample-random-b.out || fail "sample seeded random"
 
-sample --count 10 --seed 99 /tmp/sample-values.txt |
-	wc -l | grep -qx "10" || fail "sample count"
-sample --count 200 --seed 99 /tmp/sample-values.txt |
-	wc -l | grep -qx "100" || fail "sample count larger than input"
+[ "$(sample --count 10 --seed 99 /tmp/sample-values.txt | wc -l)" -eq 10 ] || fail "sample count"
+[ "$(sample --count 200 --seed 99 /tmp/sample-values.txt | wc -l)" -eq 100 ] || fail "sample count larger than input"
 
 printf "  keep spaces  \nlast-no-newline" > /tmp/sample-preserve.txt
 sample --rate 1 /tmp/sample-preserve.txt > /tmp/sample-preserve.out
 cmp /tmp/sample-preserve.txt /tmp/sample-preserve.out || fail "sample preserves records exactly"
+
+printf "aa\0bb\0" | sample -0 --rate 1 - > /tmp/sample-nul.out
+printf "aa\0bb\0" > /tmp/sample-nul.want
+cmp /tmp/sample-nul.out /tmp/sample-nul.want || fail "sample nul records"
 
 expect_status 2 "sample ambiguous flags" \
 	sample --rate 0.1 --count 10 /tmp/sample-values.txt
