@@ -16,14 +16,16 @@ type Config struct {
 }
 
 type Result struct {
-	Rank          int    `json:"rank"`
-	Item          string `json:"item"`
-	CountEstimate uint64 `json:"count_estimate"`
+	Rank            int    `json:"rank"`
+	Item            string `json:"item"`
+	CountEstimate   uint64 `json:"count_estimate"`
+	CountLowerBound uint64 `json:"count_lower_bound"`
 }
 
 type trackedItem struct {
 	item  string
 	count uint64
+	error uint64
 	index int
 }
 
@@ -105,6 +107,7 @@ func approximate(paths []string, cfg Config) ([]Result, error) {
 
 		replaced := heap.Pop(&items).(*trackedItem)
 		delete(tracked, replaced.item)
+		replaced.error = replaced.count
 		replaced.item = key
 		replaced.count++
 		tracked[key] = replaced
@@ -115,7 +118,7 @@ func approximate(paths []string, cfg Config) ([]Result, error) {
 	}
 	results := make([]Result, 0, len(tracked))
 	for item, entry := range tracked {
-		results = append(results, Result{Item: item, CountEstimate: entry.count})
+		results = append(results, Result{Item: item, CountEstimate: entry.count, CountLowerBound: entry.count - entry.error})
 	}
 	return rank(results, cfg.Top), nil
 }
@@ -123,7 +126,7 @@ func approximate(paths []string, cfg Config) ([]Result, error) {
 func ranked(counts map[string]uint64, top int) []Result {
 	items := make([]Result, 0, len(counts))
 	for item, count := range counts {
-		items = append(items, Result{Item: item, CountEstimate: count})
+		items = append(items, Result{Item: item, CountEstimate: count, CountLowerBound: count})
 	}
 	return rank(items, top)
 }

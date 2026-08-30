@@ -55,9 +55,9 @@ heavy --top 20 --exact values.txt
 Default output:
 
 ```text
-rank  count_estimate  item
-1     823991          /api/search
-2     712330          /api/login
+rank  count_estimate  count_lower_bound  item
+1     823991          823102             /api/search
+2     712330          711908             /api/login
 ```
 
 TSV output:
@@ -77,12 +77,13 @@ heavy --top 20 --json values.txt
   {
     "rank": 1,
     "item": "/api/search",
-    "count_estimate": 823991
+    "count_estimate": 823991,
+    "count_lower_bound": 823102
   }
 ]
 ```
 
-The field is named `count_estimate` even in exact mode so scripts can switch modes without changing parsers.
+The true observed count is between `count_lower_bound` and `count_estimate`. In exact mode the two values are equal, so scripts can switch modes without changing parsers.
 
 ## Options
 
@@ -120,6 +121,8 @@ Approximate mode can:
 - overestimate counts
 - miss low-frequency items
 - produce approximate ordering near the cutoff
+
+The lower bound accounts for uncertainty introduced when the bounded tracker replaces a low-frequency item.
 
 Increase `--capacity` when ordering quality matters. Use `--exact` when the input is small enough to keep every distinct value in memory.
 
