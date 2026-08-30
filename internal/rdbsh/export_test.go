@@ -30,6 +30,13 @@ func TestWriteExportFileIsAtomicAndRequiresForce(t *testing.T) {
 	if got, err := os.ReadFile(path); err != nil || string(got) != "existing" {
 		t.Fatalf("failed export changed destination: content=%q error=%v", got, err)
 	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("export mode = %v, want 0600", info.Mode().Perm())
+	}
 
 	if _, err := writeExportFile(path, true, write("partial", errors.New("write failed"))); err == nil {
 		t.Fatal("writeExportFile() succeeded after writer error")

@@ -73,10 +73,6 @@ func writeExportFile(filePath string, force bool, write func(io.Writer) (int, er
 		file.Close()
 		return 0, writeErr
 	}
-	if err := file.Chmod(0o644); err != nil {
-		file.Close()
-		return 0, err
-	}
 	if err := file.Close(); err != nil {
 		return 0, fmt.Errorf("close export file: %w", err)
 	}
