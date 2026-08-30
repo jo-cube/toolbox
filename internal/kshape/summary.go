@@ -101,7 +101,6 @@ func (s *Summary) Add(record Record) error {
 		if err := validateTopic(record.Topic); err != nil {
 			return err
 		}
-		s.Topic = record.Topic
 	} else if s.Topic != record.Topic {
 		return fmt.Errorf("topic %q differs from %q", record.Topic, s.Topic)
 	}
@@ -121,7 +120,6 @@ func (s *Summary) Add(record Record) error {
 	}
 	if partition == nil {
 		partition = &Partition{Regions: make(map[uint64]*Region)}
-		s.Partitions[record.Partition] = partition
 	}
 	bucket := uint64(record.Offset) / s.BucketWidth
 	region := partition.Regions[bucket]
@@ -137,13 +135,21 @@ func (s *Summary) Add(record Record) error {
 			Coverage:    []OffsetSpan{{FirstOffset: record.Offset, LastOffset: record.Offset}},
 			Keys:        keys,
 		}
-		partition.Regions[bucket] = region
 	}
 	if region.Records == math.MaxUint64 ||
 		(record.PayloadLength >= 0 && uint64(record.PayloadLength) > math.MaxUint64-region.PayloadBytes) {
 		return fmt.Errorf("counter overflow")
 	}
 
+	if s.Topic == "" {
+		s.Topic = record.Topic
+	}
+	if s.Partitions[record.Partition] == nil {
+		s.Partitions[record.Partition] = partition
+	}
+	if partition.Regions[bucket] == nil {
+		partition.Regions[bucket] = region
+	}
 	knownTimestamps := region.Records - region.MissingTimestamps
 	region.Records++
 	if record.PayloadLength == -1 {
