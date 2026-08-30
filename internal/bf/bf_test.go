@@ -54,6 +54,31 @@ func TestUnionRejectsIncompatibleFilters(t *testing.T) {
 	}
 }
 
+func TestUnionFromSerializedFilter(t *testing.T) {
+	t.Parallel()
+
+	a, err := New(100, 0.01)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := New(100, 0.01)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Add([]byte("alpha"))
+	b.Add([]byte("beta"))
+	var serialized bytes.Buffer
+	if err := Write(&serialized, b); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.UnionFrom(&serialized, DefaultMaxBytes); err != nil {
+		t.Fatal(err)
+	}
+	if !a.Test([]byte("alpha")) || !a.Test([]byte("beta")) || a.InsertedItems != 2 {
+		t.Fatal("streaming union changed filter behavior")
+	}
+}
+
 func TestReadRejectsBadMagic(t *testing.T) {
 	t.Parallel()
 
@@ -215,5 +240,66 @@ func TestReadWithLimit(t *testing.T) {
 	}
 	if _, err := ReadWithLimit(bytes.NewReader(buf.Bytes()), 0); err != nil {
 		t.Fatalf("ReadWithLimit() with no limit: %v", err)
+	}
+}
+
+func TestInspectStreamsHealthMetadata(t *testing.T) {
+	t.Parallel()
+
+	f, err := New(100, 0.01)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Add([]byte("alpha"))
+	var buf bytes.Buffer
+	if err := Write(&buf, f); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Inspect(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.BitsetBytes != uint64(len(f.Bits)) || m.SetBits == 0 || m.FillRatio <= 0 || m.EstimatedFalsePositiveRate <= 0 {
+		t.Fatalf("Inspect() metadata = %#v", m)
+	}
+}
+
+func TestHealthMetadataIgnoresUnusedPaddingBits(t *testing.T) {
+	t.Parallel()
+
+	f := &Filter{ExpectedItems: 1, FalsePositiveRate: 0.1, BitCount: 9, HashCount: 1, Bits: []byte{0xff, 0xff}}
+	if got := f.Metadata().SetBits; got != 9 {
+		t.Fatalf("Metadata().SetBits = %d, want 9", got)
+	}
+	var serialized bytes.Buffer
+	if err := Write(&serialized, f); err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := Inspect(&serialized)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if metadata.SetBits != 9 || metadata.FillRatio != 1 {
+		t.Fatalf("Inspect() metadata = %#v", metadata)
+	}
+}
+
+func TestStreamingOperationsRejectTruncatedBitsets(t *testing.T) {
+	t.Parallel()
+
+	f, err := New(100, 0.01)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := Write(&buf, f); err != nil {
+		t.Fatal(err)
+	}
+	truncated := buf.Bytes()[:buf.Len()-1]
+	if _, err := Inspect(bytes.NewReader(truncated)); err == nil {
+		t.Fatal("Inspect accepted a truncated bitset")
+	}
+	if err := f.UnionFrom(bytes.NewReader(truncated), DefaultMaxBytes); err == nil {
+		t.Fatal("UnionFrom accepted a truncated bitset")
 	}
 }
