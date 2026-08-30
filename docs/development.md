@@ -48,7 +48,7 @@ The usual split is:
 
 - `cmd/<tool>/main.go` owns flags, help text, stdout/stderr formatting, and exit codes.
 - `internal/<tool>/` owns behavior that can be tested without shelling out.
-- `internal/prob/` owns shared line/NUL input handling and stable hashing for probabilistic tools.
+- `internal/prob/` owns shared line/NUL input handling, literal field selection, and stable hashing for probabilistic tools.
 
 Use `hello` as the minimal reference for that shape.
 
