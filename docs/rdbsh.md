@@ -170,6 +170,7 @@ When the export target is `-`, data is written to stdout and the completion mess
 
 Exporting to a file fails if the file already exists unless `--force` is set.
 File exports replace the destination only after the complete export has been written successfully.
+Export files are created with owner-only permissions because database values may be sensitive.
 
 Exported keys and values are round-trippable through the shell input format. Ordinary printable text stays readable. Empty, binary, and text beginning with `0x` or `0X` is emitted as unambiguous lowercase hex; for example, an empty value is `0x`, a zero byte is `0x00`, and the literal text `0x00` is `0x30783030`.
 

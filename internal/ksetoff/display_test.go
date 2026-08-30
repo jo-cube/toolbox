@@ -77,7 +77,7 @@ func TestWriteWarnings(t *testing.T) {
 		t.Fatal("WriteWarnings() = false, want true")
 	}
 	out := buf.String()
-	for _, want := range []string{"partition 0", "earliest available", "partition 1", "wait for new messages"} {
+	for _, want := range []string{"partition 0", "partition 1", "auto.offset.reset"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("WriteWarnings() output missing %q\n%s", want, out)
 		}

@@ -44,7 +44,7 @@ func ParseConfigFile(path string) (*KafkaConfig, error) {
 
 		key, value, found := strings.Cut(line, "=")
 		if !found {
-			return nil, fmt.Errorf("config file %s:%d: expected key=value, got %q", path, lineNo, line)
+			return nil, fmt.Errorf("config file %s:%d: expected key=value", path, lineNo)
 		}
 
 		key = strings.TrimSpace(key)

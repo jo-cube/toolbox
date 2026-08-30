@@ -366,6 +366,24 @@ func TestAddRejectsPayloadCounterOverflow(t *testing.T) {
 	}
 }
 
+func TestAddDoesNotMutateSummaryForRejectedRecord(t *testing.T) {
+	t.Parallel()
+
+	summary, err := New(4, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := summary.Add(Record{Topic: "events", Partition: -1}); err == nil {
+		t.Fatal("Add() accepted a negative partition")
+	}
+	if summary.Topic != "" || len(summary.Partitions) != 0 {
+		t.Fatalf("rejected record changed summary: %#v", summary)
+	}
+	if err := summary.Add(Record{Topic: "other", Timestamp: -1, PayloadLength: -1, NullKey: true}); err != nil {
+		t.Fatalf("Add() after rejected record: %v", err)
+	}
+}
+
 func TestNewRequiresExplicitValidConfiguration(t *testing.T) {
 	t.Parallel()
 

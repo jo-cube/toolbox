@@ -116,3 +116,16 @@ func TestParseConfigFile(t *testing.T) {
 		})
 	}
 }
+
+func TestParseConfigFileDoesNotEchoMalformedSecrets(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "kafka.conf")
+	if err := os.WriteFile(path, []byte("sasl.password hunter2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := ParseConfigFile(path)
+	if err == nil || strings.Contains(err.Error(), "hunter2") {
+		t.Fatalf("ParseConfigFile() error = %q, want redacted malformed line", err)
+	}
+}

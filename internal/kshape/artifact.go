@@ -1,6 +1,7 @@
 package kshape
 
 import (
+	"bufio"
 	"encoding/binary"
 	"fmt"
 	"hash/crc32"
@@ -28,8 +29,9 @@ func Write(w io.Writer, s *Summary) error {
 	if err := validateSummary(s); err != nil {
 		return err
 	}
+	buffered := bufio.NewWriter(w)
 	checksum := crc32.New(checksumTable)
-	body := io.MultiWriter(w, checksum)
+	body := io.MultiWriter(buffered, checksum)
 	if _, err := io.WriteString(body, Magic); err != nil {
 		return err
 	}
@@ -88,12 +90,16 @@ func Write(w io.Writer, s *Summary) error {
 			}
 		}
 	}
-	return binary.Write(w, binary.BigEndian, checksum.Sum32())
+	if err := binary.Write(buffered, binary.BigEndian, checksum.Sum32()); err != nil {
+		return err
+	}
+	return buffered.Flush()
 }
 
 func Read(r io.Reader) (*Summary, error) {
+	buffered := bufio.NewReader(r)
 	checksum := crc32.New(checksumTable)
-	body := io.TeeReader(r, checksum)
+	body := io.TeeReader(buffered, checksum)
 	var magic [4]byte
 	if _, err := io.ReadFull(body, magic[:]); err != nil {
 		return nil, fmt.Errorf("read magic: %w", err)
@@ -247,14 +253,14 @@ func Read(r io.Reader) (*Summary, error) {
 		return nil, fmt.Errorf("non-empty artifact has empty topic")
 	}
 	var storedChecksum uint32
-	if err := binary.Read(r, binary.BigEndian, &storedChecksum); err != nil {
+	if err := binary.Read(buffered, binary.BigEndian, &storedChecksum); err != nil {
 		return nil, fmt.Errorf("read checksum: %w", err)
 	}
 	if actual := checksum.Sum32(); actual != storedChecksum {
 		return nil, fmt.Errorf("checksum mismatch: got %08x, want %08x", storedChecksum, actual)
 	}
 	var trailing [1]byte
-	if n, err := r.Read(trailing[:]); n != 0 || err != io.EOF {
+	if n, err := buffered.Read(trailing[:]); n != 0 || err != io.EOF {
 		if err != nil && err != io.EOF {
 			return nil, fmt.Errorf("read trailing data: %w", err)
 		}
