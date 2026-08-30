@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	Magic                 = "BLM1"
-	Version        uint8  = 1
-	maxFilterBytes        = 512 << 20
-	maxHashCount   uint32 = 64
+	Magic                  = "BLM1"
+	Version         uint8  = 1
+	DefaultMaxBytes uint64 = 2 << 30
+	maxHashCount    uint32 = 64
 )
 
 type Filter struct {
@@ -37,7 +37,12 @@ type Metadata struct {
 }
 
 func New(expected uint64, rate float64) (*Filter, error) {
-	m, k, byteCount, err := sizing(expected, rate)
+	return NewWithLimit(expected, rate, DefaultMaxBytes)
+}
+
+// NewWithLimit disables the allocation limit when maxBytes is zero.
+func NewWithLimit(expected uint64, rate float64, maxBytes uint64) (*Filter, error) {
+	m, k, byteCount, err := sizing(expected, rate, maxBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +56,7 @@ func New(expected uint64, rate float64) (*Filter, error) {
 	}, nil
 }
 
-func sizing(expected uint64, rate float64) (uint64, uint32, uint64, error) {
+func sizing(expected uint64, rate float64, maxBytes uint64) (uint64, uint32, uint64, error) {
 	if expected == 0 {
 		return 0, 0, 0, fmt.Errorf("expected-items must be greater than zero")
 	}
@@ -60,8 +65,11 @@ func sizing(expected uint64, rate float64) (uint64, uint32, uint64, error) {
 	}
 
 	bitCountFloat := math.Ceil(-float64(expected) * math.Log(rate) / (math.Ln2 * math.Ln2))
-	if math.IsInf(bitCountFloat, 0) || bitCountFloat > maxFilterBytes*8 {
-		return 0, 0, 0, fmt.Errorf("expected-items and false-positive-rate require more than the %d MiB allocation limit", maxFilterBytes>>20)
+	if maxBytes != 0 && bitCountFloat > float64(maxBytes)*8 {
+		return 0, 0, 0, fmt.Errorf("expected-items and false-positive-rate require more than the %d MiB allocation limit", maxBytes>>20)
+	}
+	if math.IsInf(bitCountFloat, 0) || bitCountFloat >= float64(math.MaxUint64) {
+		return 0, 0, 0, fmt.Errorf("expected-items and false-positive-rate exceed the filter format")
 	}
 	bitCount := uint64(bitCountFloat)
 	hashCount := uint32(math.Round(float64(bitCount) / float64(expected) * math.Ln2))
@@ -74,6 +82,9 @@ func sizing(expected uint64, rate float64) (uint64, uint32, uint64, error) {
 	byteCount := bitCount / 8
 	if bitCount%8 != 0 {
 		byteCount++
+	}
+	if byteCount > uint64(maxInt()) {
+		return 0, 0, 0, fmt.Errorf("filter requires %d bytes, exceeding this platform's allocation limit", byteCount)
 	}
 	return bitCount, hashCount, byteCount, nil
 }
@@ -171,6 +182,11 @@ func Write(w io.Writer, f *Filter) error {
 }
 
 func Read(r io.Reader) (*Filter, error) {
+	return ReadWithLimit(r, DefaultMaxBytes)
+}
+
+// ReadWithLimit disables the allocation limit when maxBytes is zero.
+func ReadWithLimit(r io.Reader, maxBytes uint64) (*Filter, error) {
 	var magic [4]byte
 	if _, err := io.ReadFull(r, magic[:]); err != nil {
 		return nil, fmt.Errorf("read magic: %w", err)
@@ -214,15 +230,24 @@ func Read(r io.Reader) (*Filter, error) {
 	if math.IsNaN(f.FalsePositiveRate) || math.IsInf(f.FalsePositiveRate, 0) || f.FalsePositiveRate <= 0 || f.FalsePositiveRate >= 1 {
 		return nil, fmt.Errorf("invalid false-positive rate %g", f.FalsePositiveRate)
 	}
-	if f.BitCount == 0 || f.BitCount > maxFilterBytes*8 {
+	if f.BitCount == 0 {
 		return nil, fmt.Errorf("invalid bit count %d", f.BitCount)
 	}
 	if f.HashCount == 0 || f.HashCount > maxHashCount {
 		return nil, fmt.Errorf("invalid hash count %d", f.HashCount)
 	}
-	wantBytes := (f.BitCount + 7) / 8
+	wantBytes := f.BitCount / 8
+	if f.BitCount%8 != 0 {
+		wantBytes++
+	}
 	if byteCount != wantBytes {
 		return nil, fmt.Errorf("invalid bitset size %d for %d bits", byteCount, f.BitCount)
+	}
+	if maxBytes != 0 && byteCount > maxBytes {
+		return nil, fmt.Errorf("bitset size %d exceeds the %d MiB allocation limit", byteCount, maxBytes>>20)
+	}
+	if byteCount > uint64(maxInt()) {
+		return nil, fmt.Errorf("bitset size %d exceeds this platform's allocation limit", byteCount)
 	}
 	f.Bits = make([]byte, byteCount)
 	if _, err := io.ReadFull(r, f.Bits); err != nil {
@@ -230,6 +255,8 @@ func Read(r io.Reader) (*Filter, error) {
 	}
 	return f, nil
 }
+
+func maxInt() int { return int(^uint(0) >> 1) }
 
 func writeString(w io.Writer, value string) error {
 	if len(value) > 255 {

@@ -156,6 +156,21 @@ func TestNewRejectsUnsafeSizing(t *testing.T) {
 	}
 }
 
+func TestSizingLimit(t *testing.T) {
+	t.Parallel()
+
+	_, _, bytes, err := sizing(1_000_000_000, 0.001, DefaultMaxBytes)
+	if err != nil || bytes <= 512<<20 {
+		t.Fatalf("billion-item sizing = %d bytes, %v", bytes, err)
+	}
+	if _, _, _, err := sizing(2_000_000_000, 0.001, DefaultMaxBytes); err == nil {
+		t.Fatal("sizing accepted more than the default limit")
+	}
+	if _, _, bytes, err = sizing(2_000_000_000, 0.001, 0); err != nil || bytes <= DefaultMaxBytes {
+		t.Fatalf("unlimited sizing = %d bytes, %v", bytes, err)
+	}
+}
+
 func TestReadRejectsUnsafeHashCount(t *testing.T) {
 	t.Parallel()
 
@@ -184,5 +199,21 @@ func TestReadAcceptsBoundedAlternateSizing(t *testing.T) {
 	}
 	if _, err := Read(&buf); err != nil {
 		t.Fatalf("Read() rejected structurally valid sizing: %v", err)
+	}
+}
+
+func TestReadWithLimit(t *testing.T) {
+	t.Parallel()
+
+	f := &Filter{ExpectedItems: 100, FalsePositiveRate: 0.01, BitCount: 16, HashCount: 1, Bits: []byte{1, 2}}
+	var buf bytes.Buffer
+	if err := Write(&buf, f); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadWithLimit(bytes.NewReader(buf.Bytes()), 1); err == nil || !strings.Contains(err.Error(), "allocation limit") {
+		t.Fatalf("ReadWithLimit() error = %v, want allocation limit", err)
+	}
+	if _, err := ReadWithLimit(bytes.NewReader(buf.Bytes()), 0); err != nil {
+		t.Fatalf("ReadWithLimit() with no limit: %v", err)
 	}
 }
