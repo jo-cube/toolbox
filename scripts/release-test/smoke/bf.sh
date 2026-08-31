@@ -20,7 +20,7 @@ cmp /tmp/bf-miss.out /tmp/bf-miss.want || fail "bf invert"
 
 bf inspect /tmp/names.bf | grep -q "type=bloom-filter" || fail "bf inspect"
 bf inspect --json /tmp/names.bf |
-	jq -e '.type == "bloom-filter" and .inserted_items == 3 and .set_bits > 0 and .fill_ratio > 0 and .estimated_false_positive_rate > 0 and .hash == "fnv1a64-avalanche-v1"' >/dev/null ||
+	jq -e '.type == "bloom-filter" and .inserted_items == 3 and .set_bits > 0 and .fill_ratio > 0 and .estimated_false_positive_rate > 0 and .hash == "xxhash64-v1"' >/dev/null ||
 	fail "bf inspect json"
 cat /tmp/names.bf | bf inspect - | grep -q "type=bloom-filter" || fail "bf inspect stdin"
 
@@ -62,7 +62,7 @@ printf "alice\ndave\n" | bf test /tmp/union.bf > /tmp/bf-union.out
 printf "alice\ndave\n" > /tmp/bf-union.want
 cmp /tmp/bf-union.out /tmp/bf-union.want || fail "bf union"
 
-printf "erin\n" | bf build --expected-items 20 --false-positive-rate 0.01 > /tmp/incompatible.bf
+printf "erin\n" | bf build --expected-items 100 --false-positive-rate 0.01 > /tmp/incompatible.bf
 expect_status 1 "bf rejects incompatible union" bf union /tmp/union-a.bf /tmp/incompatible.bf
 printf "not a bloom filter\n" > /tmp/bad.bf
 expect_status 1 "bf rejects corrupt state" bf inspect /tmp/bad.bf
