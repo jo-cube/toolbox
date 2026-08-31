@@ -82,7 +82,7 @@ The tools use estimate-oriented field names such as `approx_unique` and `count_e
 
 ## Hashing
 
-Tools that need deterministic hashing use `fnv1a64-avalanche-v1`.
+HLL and stable sampling use `fnv1a64-avalanche-v1`. Bloom filter version 2 uses `xxhash64-v1` with 256-bit split blocks.
 
 The hash is stable across supported platforms and does not use Go's randomized map hashing. State files record hash metadata and reject unsupported hash names.
 
@@ -110,7 +110,7 @@ cat shard.bf | bf union baseline.bf - > combined.bf
 Compatibility rules:
 
 - HLL sketches can merge only when precision, register count, version, and hash metadata match.
-- Bloom filters can union only when bit count, hash count, false-positive rate, version, and hash metadata match.
+- Bloom filters can union only when split-block bitset size, version, and hash metadata match.
 
 ## Composition
 

@@ -2,7 +2,10 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -135,6 +138,44 @@ func TestUnionReadsOneFilterFromStdin(t *testing.T) {
 	}
 }
 
+func BenchmarkTestMostlyNegative(b *testing.B) {
+	const keyCount = 1_000_000
+	f, err := internalbf.New(keyCount, 0.001)
+	if err != nil {
+		b.Fatal(err)
+	}
+	input := make([]byte, 0, 17*keyCount)
+	var raw [8]byte
+	var key [16]byte
+	for i := range keyCount {
+		binary.BigEndian.PutUint64(raw[:], uint64(i))
+		hex.Encode(key[:], raw[:])
+		input = append(input, key[:]...)
+		input = append(input, '\n')
+		if i%20 == 0 {
+			f.Add(key[:])
+		}
+	}
+	var filler [16]byte
+	filler[0] = 0xff
+	for i := uint64(0); f.InsertedItems < f.ExpectedItems; i++ {
+		binary.BigEndian.PutUint64(filler[8:], i)
+		f.Add(filler[:])
+	}
+	path := writeFilter(b, "filter.bf", f)
+	args := []string{path}
+
+	b.SetBytes(int64(len(input)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		if err := test(args, bytes.NewReader(input), io.Discard); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.ReportMetric(keyCount, "keys/op")
+}
+
 func newFilter(t *testing.T, items ...string) *internalbf.Filter {
 	t.Helper()
 	f, err := internalbf.New(100, 0.000001)
@@ -147,7 +188,7 @@ func newFilter(t *testing.T, items ...string) *internalbf.Filter {
 	return f
 }
 
-func writeFilter(t *testing.T, name string, f *internalbf.Filter) string {
+func writeFilter(t testing.TB, name string, f *internalbf.Filter) string {
 	t.Helper()
 	var data bytes.Buffer
 	if err := internalbf.Write(&data, f); err != nil {

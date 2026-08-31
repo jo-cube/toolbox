@@ -81,21 +81,23 @@ func (s *Sketch) Merge(other *Sketch) error {
 }
 
 func (s *Sketch) Estimate() uint64 {
-	m := float64(len(s.Registers))
-	var sum float64
-	zeros := 0
-	for _, r := range s.Registers {
-		sum += math.Ldexp(1, -int(r))
-		if r == 0 {
-			zeros++
-		}
+	q := 64 - int(s.Precision)
+	var counts [64]uint64
+	for _, register := range s.Registers {
+		counts[register]++
 	}
 
-	raw := alpha(len(s.Registers)) * m * m / sum
-	if raw <= 2.5*m && zeros > 0 {
-		raw = m * math.Log(m/float64(zeros))
+	m := float64(len(s.Registers))
+	z := m * tau(1-float64(counts[q+1])/m)
+	for k := q; k >= 1; k-- {
+		z = 0.5 * (z + float64(counts[k]))
 	}
-	return uint64(math.Round(raw))
+	z += m * sigma(float64(counts[0])/m)
+	estimate := m * m / (2 * math.Ln2 * z)
+	if estimate >= math.MaxUint64 {
+		return math.MaxUint64
+	}
+	return uint64(math.Round(estimate))
 }
 
 func (s *Sketch) RelativeError() float64 {
@@ -187,16 +189,35 @@ func Read(r io.Reader) (*Sketch, error) {
 	return s, nil
 }
 
-func alpha(m int) float64 {
-	switch m {
-	case 16:
-		return 0.673
-	case 32:
-		return 0.697
-	case 64:
-		return 0.709
-	default:
-		return 0.7213 / (1 + 1.079/float64(m))
+func sigma(x float64) float64 {
+	if x == 1 {
+		return math.Inf(1)
+	}
+	y, z := 1.0, x
+	for {
+		x *= x
+		previous := z
+		z += x * y
+		y += y
+		if z == previous {
+			return z
+		}
+	}
+}
+
+func tau(x float64) float64 {
+	if x == 0 || x == 1 {
+		return 0
+	}
+	y, z := 1.0, 1-x
+	for {
+		x = math.Sqrt(x)
+		previous := z
+		y *= 0.5
+		z -= (1 - x) * (1 - x) * y
+		if z == previous {
+			return z / 3
+		}
 	}
 }
 

@@ -259,7 +259,6 @@ Options:
 	fmt.Fprintf(out, "bitset_bytes=%d\n", m.BitsetBytes)
 	fmt.Fprintf(out, "set_bits=%d\n", m.SetBits)
 	fmt.Fprintf(out, "fill_ratio=%g\n", m.FillRatio)
-	fmt.Fprintf(out, "hash_count=%d\n", m.HashCount)
 	fmt.Fprintf(out, "hash=%s\n", m.Hash)
 	return nil
 }
@@ -271,7 +270,7 @@ func union(args []string, in io.Reader, out io.Writer) error {
 		fmt.Fprint(fs.Output(), `Usage: bf union [--no-size-limit] <filter.bf> <filter.bf>... > combined.bf
 
 Union compatible Bloom filters and write a binary filter to stdout.
-Filters must have compatible bit count, hash count, false-positive rate, version, and hash metadata.
+Filters must have the same split-block bitset size, version, and hash metadata.
 
 Options:
 `)

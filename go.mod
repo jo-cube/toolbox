@@ -3,6 +3,7 @@ module github.com/jo-cube/toolbox
 go 1.26.4
 
 require (
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/twmb/franz-go v1.20.7
 	github.com/twmb/franz-go/pkg/kadm v1.17.2
 )

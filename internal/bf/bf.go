@@ -7,22 +7,30 @@ import (
 	"math"
 	"math/bits"
 
-	"github.com/jo-cube/toolbox/internal/prob"
+	"github.com/cespare/xxhash/v2"
 )
 
 const (
 	Magic                  = "BLM1"
-	Version         uint8  = 1
+	Version         uint8  = 2
+	HashName               = "xxhash64-v1"
 	DefaultMaxBytes uint64 = 2 << 30
-	maxHashCount    uint32 = 64
+	blockBytes             = 32
+	blockBits              = blockBytes * 8
+	blockHashCount         = 8
+	maxBlockCount   uint64 = 1<<32 - 1
+	maxFormatBytes         = maxBlockCount * blockBytes
 )
+
+var blockSalts = [...]uint32{
+	0x47b6137b, 0x44974d91, 0x8824ad5b, 0xa2b7289d,
+	0x705495c7, 0x2df1424b, 0x9efc4947, 0x5c6bfb31,
+}
 
 type Filter struct {
 	ExpectedItems     uint64
 	InsertedItems     uint64
 	FalsePositiveRate float64
-	BitCount          uint64
-	HashCount         uint32
 	Bits              []byte
 }
 
@@ -34,7 +42,6 @@ type Metadata struct {
 	FalsePositiveRate          float64 `json:"false_positive_rate"`
 	BitCount                   uint64  `json:"bit_count"`
 	BitsetBytes                uint64  `json:"bitset_bytes"`
-	HashCount                  uint32  `json:"hash_count"`
 	Hash                       string  `json:"hash"`
 	SetBits                    uint64  `json:"set_bits"`
 	FillRatio                  float64 `json:"fill_ratio"`
@@ -47,7 +54,7 @@ func New(expected uint64, rate float64) (*Filter, error) {
 
 // NewWithLimit disables the allocation limit when maxBytes is zero.
 func NewWithLimit(expected uint64, rate float64, maxBytes uint64) (*Filter, error) {
-	m, k, byteCount, err := sizing(expected, rate, maxBytes)
+	byteCount, err := sizing(expected, rate, maxBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -55,83 +62,97 @@ func NewWithLimit(expected uint64, rate float64, maxBytes uint64) (*Filter, erro
 	return &Filter{
 		ExpectedItems:     expected,
 		FalsePositiveRate: rate,
-		BitCount:          m,
-		HashCount:         k,
 		Bits:              make([]byte, byteCount),
 	}, nil
 }
 
-func sizing(expected uint64, rate float64, maxBytes uint64) (uint64, uint32, uint64, error) {
+func sizing(expected uint64, rate float64, maxBytes uint64) (uint64, error) {
 	if expected == 0 {
-		return 0, 0, 0, fmt.Errorf("expected-items must be greater than zero")
+		return 0, fmt.Errorf("expected-items must be greater than zero")
 	}
 	if math.IsNaN(rate) || math.IsInf(rate, 0) || rate <= 0 || rate >= 1 {
-		return 0, 0, 0, fmt.Errorf("false-positive-rate must be greater than 0 and less than 1")
+		return 0, fmt.Errorf("false-positive-rate must be greater than 0 and less than 1")
 	}
 
-	bitCountFloat := math.Ceil(-float64(expected) * math.Log(rate) / (math.Ln2 * math.Ln2))
-	if maxBytes != 0 && bitCountFloat > float64(maxBytes)*8 {
-		return 0, 0, 0, fmt.Errorf("expected-items and false-positive-rate require more than the %d MiB allocation limit", maxBytes>>20)
+	bitCountFloat := float64(expected) * splitBlockBitsPerItem(rate)
+	byteCountFloat := math.Ceil(bitCountFloat/blockBits) * blockBytes
+	if maxBytes != 0 && byteCountFloat > float64(maxBytes) {
+		return 0, fmt.Errorf("expected-items and false-positive-rate require more than the %d MiB allocation limit", maxBytes>>20)
 	}
-	if math.IsInf(bitCountFloat, 0) || bitCountFloat >= float64(math.MaxUint64) {
-		return 0, 0, 0, fmt.Errorf("expected-items and false-positive-rate exceed the filter format")
+	if math.IsInf(byteCountFloat, 0) || byteCountFloat > float64(maxFormatBytes) {
+		return 0, fmt.Errorf("expected-items and false-positive-rate exceed the filter format")
 	}
-	bitCount := uint64(bitCountFloat)
-	hashCount := uint32(math.Round(float64(bitCount) / float64(expected) * math.Ln2))
-	if hashCount == 0 {
-		hashCount = 1
-	}
-	if hashCount > maxHashCount {
-		return 0, 0, 0, fmt.Errorf("false-positive-rate requires %d hashes; maximum supported is %d", hashCount, maxHashCount)
-	}
-	byteCount := bitCount / 8
-	if bitCount%8 != 0 {
-		byteCount++
-	}
+	byteCount := uint64(byteCountFloat)
 	if byteCount > uint64(maxInt()) {
-		return 0, 0, 0, fmt.Errorf("filter requires %d bytes, exceeding this platform's allocation limit", byteCount)
+		return 0, fmt.Errorf("filter requires %d bytes, exceeding this platform's allocation limit", byteCount)
 	}
-	return bitCount, hashCount, byteCount, nil
+	return byteCount, nil
+}
+
+func splitBlockBitsPerItem(rate float64) float64 {
+	low, high := 0.0, 1.0
+	for splitBlockFalsePositiveRate(high) > rate {
+		high *= 2
+	}
+	for range 64 {
+		mid := (low + high) / 2
+		if splitBlockFalsePositiveRate(mid) > rate {
+			low = mid
+		} else {
+			high = mid
+		}
+	}
+	return high
+}
+
+func splitBlockFalsePositiveRate(bitsPerItem float64) float64 {
+	lambda := blockBits / bitsPerItem
+	if lambda > 700 {
+		return 1
+	}
+	probability := math.Exp(-lambda)
+	laneUnset := 1.0
+	var rate float64
+	limit := int(math.Ceil(lambda + 12*math.Sqrt(lambda) + 64))
+	for inserted := 0; inserted <= limit; inserted++ {
+		rate += probability * math.Pow(1-laneUnset, float64(blockHashCount))
+		probability *= lambda / float64(inserted+1)
+		laneUnset *= 31.0 / 32
+	}
+	return rate
 }
 
 func (f *Filter) Add(item []byte) {
-	f.eachPosition(item, func(bit uint64) bool {
-		f.Bits[bit/8] |= 1 << (bit % 8)
-		return true
-	})
+	hash := xxhash.Sum64(item)
+	blocks := uint64(len(f.Bits) / blockBytes)
+	offset := int((uint64(uint32(hash>>32))*blocks)>>32) * blockBytes
+	block := f.Bits[offset : offset+blockBytes]
+	x := uint32(hash)
+	for i, salt := range blockSalts {
+		bit := (x * salt) >> 27
+		index := i*4 + int(bit>>3)
+		block[index] |= 1 << (bit & 7)
+	}
 	f.InsertedItems++
 }
 
 func (f *Filter) Test(item []byte) bool {
-	present := true
-	f.eachPosition(item, func(bit uint64) bool {
-		if f.Bits[bit/8]&(1<<(bit%8)) == 0 {
-			present = false
+	hash := xxhash.Sum64(item)
+	blocks := uint64(len(f.Bits) / blockBytes)
+	offset := int((uint64(uint32(hash>>32))*blocks)>>32) * blockBytes
+	block := f.Bits[offset : offset+blockBytes]
+	x := uint32(hash)
+	for i, salt := range blockSalts {
+		bit := (x * salt) >> 27
+		index := i*4 + int(bit>>3)
+		if block[index]&(1<<(bit&7)) == 0 {
 			return false
 		}
-		return true
-	})
-	return present
-}
-
-func (f *Filter) eachPosition(item []byte, fn func(uint64) bool) {
-	h1 := prob.Hash64(item, 0)
-	h2 := prob.Hash64(item, 0x9e3779b97f4a7c15)
-	if h2 == 0 {
-		h2 = 1
 	}
-
-	for i := uint32(0); i < f.HashCount; i++ {
-		if !fn((h1 + uint64(i)*h2) % f.BitCount) {
-			return
-		}
-	}
+	return true
 }
 
 func (f *Filter) Union(other *Filter) error {
-	if err := f.compatible(other); err != nil {
-		return err
-	}
 	if len(f.Bits) != len(other.Bits) {
 		return fmt.Errorf("incompatible Bloom filters")
 	}
@@ -146,36 +167,29 @@ func (f *Filter) Union(other *Filter) error {
 }
 
 func (f *Filter) Metadata() Metadata {
-	return f.metadata(countSetBits(f.Bits, 0, f.BitCount))
+	return f.metadata(countSetBits(f.Bits), uint64(len(f.Bits)))
 }
 
-func (f *Filter) metadata(setBits uint64) Metadata {
-	bitsetBytes := f.BitCount / 8
-	if f.BitCount%8 != 0 {
-		bitsetBytes++
+func (f *Filter) metadata(setBits, bitsetBytes uint64) Metadata {
+	bitCount := bitsetBytes * 8
+	fillRatio := float64(setBits) / float64(bitCount)
+	var estimatedRate float64
+	if f.InsertedItems != 0 {
+		estimatedRate = splitBlockFalsePositiveRate(float64(bitCount) / float64(f.InsertedItems))
 	}
-	fillRatio := float64(setBits) / float64(f.BitCount)
 	return Metadata{
 		Type:                       "bloom-filter",
 		Version:                    Version,
 		ExpectedItems:              f.ExpectedItems,
 		InsertedItems:              f.InsertedItems,
 		FalsePositiveRate:          f.FalsePositiveRate,
-		BitCount:                   f.BitCount,
+		BitCount:                   bitCount,
 		BitsetBytes:                bitsetBytes,
-		HashCount:                  f.HashCount,
-		Hash:                       prob.HashName,
+		Hash:                       HashName,
 		SetBits:                    setBits,
 		FillRatio:                  fillRatio,
-		EstimatedFalsePositiveRate: math.Pow(fillRatio, float64(f.HashCount)),
+		EstimatedFalsePositiveRate: estimatedRate,
 	}
-}
-
-func (f *Filter) compatible(other *Filter) error {
-	if f.BitCount != other.BitCount || f.HashCount != other.HashCount || f.FalsePositiveRate != other.FalsePositiveRate {
-		return fmt.Errorf("incompatible Bloom filters")
-	}
-	return nil
 }
 
 func Write(w io.Writer, f *Filter) error {
@@ -187,15 +201,13 @@ func Write(w io.Writer, f *Filter) error {
 		f.ExpectedItems,
 		f.InsertedItems,
 		f.FalsePositiveRate,
-		f.BitCount,
-		f.HashCount,
 	}
 	for _, field := range fields {
 		if err := binary.Write(w, binary.BigEndian, field); err != nil {
 			return err
 		}
 	}
-	if err := writeString(w, prob.HashName); err != nil {
+	if err := writeString(w, HashName); err != nil {
 		return err
 	}
 	if err := binary.Write(w, binary.BigEndian, uint64(len(f.Bits))); err != nil {
@@ -236,15 +248,13 @@ func InspectWithLimit(r io.Reader, maxBytes uint64) (Metadata, error) {
 		return Metadata{}, err
 	}
 	var setBits uint64
-	var offset uint64
 	err = eachBitsetChunk(r, byteCount, func(chunk []byte) {
-		setBits += countSetBits(chunk, offset, f.BitCount)
-		offset += uint64(len(chunk))
+		setBits += countSetBits(chunk)
 	})
 	if err != nil {
 		return Metadata{}, err
 	}
-	return f.metadata(setBits), nil
+	return f.metadata(setBits, byteCount), nil
 }
 
 // UnionFrom merges a serialized compatible filter without allocating its bitset.
@@ -253,7 +263,7 @@ func (f *Filter) UnionFrom(r io.Reader, maxBytes uint64) error {
 	if err != nil {
 		return err
 	}
-	if err := f.compatible(other); err != nil || uint64(len(f.Bits)) != byteCount {
+	if uint64(len(f.Bits)) != byteCount {
 		return fmt.Errorf("incompatible Bloom filters")
 	}
 	if other.InsertedItems > math.MaxUint64-f.InsertedItems {
@@ -281,29 +291,30 @@ func readHeader(r io.Reader, maxBytes uint64) (*Filter, uint64, error) {
 		return nil, 0, fmt.Errorf("invalid Bloom filter magic %q", string(magic[:]))
 	}
 
-	f := &Filter{}
 	var version uint8
+	if err := binary.Read(r, binary.BigEndian, &version); err != nil {
+		return nil, 0, err
+	}
+	if version != Version {
+		return nil, 0, fmt.Errorf("unsupported Bloom filter version %d", version)
+	}
+
+	f := &Filter{}
 	fields := []any{
-		&version,
 		&f.ExpectedItems,
 		&f.InsertedItems,
 		&f.FalsePositiveRate,
-		&f.BitCount,
-		&f.HashCount,
 	}
 	for _, field := range fields {
 		if err := binary.Read(r, binary.BigEndian, field); err != nil {
 			return nil, 0, err
 		}
 	}
-	if version != Version {
-		return nil, 0, fmt.Errorf("unsupported Bloom filter version %d", version)
-	}
 	hashName, err := readString(r)
 	if err != nil {
 		return nil, 0, err
 	}
-	if hashName != prob.HashName {
+	if hashName != HashName {
 		return nil, 0, fmt.Errorf("unsupported hash %q", hashName)
 	}
 	var byteCount uint64
@@ -316,18 +327,8 @@ func readHeader(r io.Reader, maxBytes uint64) (*Filter, uint64, error) {
 	if math.IsNaN(f.FalsePositiveRate) || math.IsInf(f.FalsePositiveRate, 0) || f.FalsePositiveRate <= 0 || f.FalsePositiveRate >= 1 {
 		return nil, 0, fmt.Errorf("invalid false-positive rate %g", f.FalsePositiveRate)
 	}
-	if f.BitCount == 0 {
-		return nil, 0, fmt.Errorf("invalid bit count %d", f.BitCount)
-	}
-	if f.HashCount == 0 || f.HashCount > maxHashCount {
-		return nil, 0, fmt.Errorf("invalid hash count %d", f.HashCount)
-	}
-	wantBytes := f.BitCount / 8
-	if f.BitCount%8 != 0 {
-		wantBytes++
-	}
-	if byteCount != wantBytes {
-		return nil, 0, fmt.Errorf("invalid bitset size %d for %d bits", byteCount, f.BitCount)
+	if byteCount == 0 || byteCount%blockBytes != 0 || byteCount > maxFormatBytes {
+		return nil, 0, fmt.Errorf("invalid split-block bitset size %d", byteCount)
 	}
 	if maxBytes != 0 && byteCount > maxBytes {
 		return nil, 0, fmt.Errorf("bitset size %d exceeds the %d MiB allocation limit", byteCount, maxBytes>>20)
@@ -349,14 +350,9 @@ func eachBitsetChunk(r io.Reader, byteCount uint64, fn func([]byte)) error {
 	return nil
 }
 
-func countSetBits(data []byte, byteOffset, bitCount uint64) uint64 {
+func countSetBits(data []byte) uint64 {
 	var count uint64
-	lastByte := bitCount / 8
-	remainingBits := bitCount % 8
-	for i, b := range data {
-		if remainingBits != 0 && byteOffset+uint64(i) == lastByte {
-			b &= byte(1<<remainingBits) - 1
-		}
+	for _, b := range data {
 		count += uint64(bits.OnesCount8(b))
 	}
 	return count
