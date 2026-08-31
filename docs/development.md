@@ -132,6 +132,7 @@ Probabilistic tools:
 
 - use the Go standard library, except for Bloom filtering's direct XXHash64 dependency
 - read streams without loading full inputs unless the selected algorithm requires it
+- estimate HLL cardinality from its register histogram using Ertl's improved raw estimator
 - keep state-file compatibility constants in package code
 
 Compatibility constants are the source of truth:

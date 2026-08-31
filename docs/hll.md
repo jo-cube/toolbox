@@ -151,6 +151,8 @@ At the default precision `14`, the sketch uses `16,384` one-byte registers and r
 
 Higher precision uses more memory and usually improves accuracy. Lower precision uses less memory and increases error.
 
+Estimates use [Ertl's improved raw estimator](https://oertl.github.io/hyperloglog-sketch-estimation-paper/paper/paper.pdf), which avoids the bias discontinuity between small- and normal-range estimates without changing the mergeable register state.
+
 ## State Files
 
 `.hll` files are binary, versioned, and architecture-independent.
