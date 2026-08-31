@@ -120,17 +120,16 @@ Example:
 
 ```text
 type=bloom-filter
-version=1
-expected_items=1000000
-inserted_items=982341
-false_positive_rate=0.001
-estimated_false_positive_rate=0.0009102
-bit_count=14377588
-bitset_bytes=1797199
-set_bits=7110234
-fill_ratio=0.494526
-hash_count=10
-hash=fnv1a64-avalanche-v1
+version=2
+expected_items=100
+inserted_items=1
+false_positive_rate=0.01
+estimated_false_positive_rate=1.1346181979753662e-11
+bit_count=1280
+bitset_bytes=160
+set_bits=8
+fill_ratio=0.00625
+hash=xxhash64-v1
 ```
 
 ### `bf union`
@@ -141,7 +140,7 @@ Combines compatible Bloom filters and writes a new filter to stdout.
 bf union service-a.bf service-b.bf > combined.bf
 ```
 
-All filters must have compatible bit count, hash count, false-positive rate, version, and hash metadata.
+All filters must have the same split-block bitset size, version, and hash metadata.
 
 `inspect` scans the bitset without loading it into memory. `union` keeps the first filter in memory and streams each later filter into it.
 
@@ -181,11 +180,13 @@ Defaults:
 
 Bloom filters trade memory for false-positive probability.
 
-If you insert more than `--expected-items`, the actual false-positive rate increases. `inspect` reports the set-bit count, fill ratio, and an estimated current false-positive rate derived from the bitset. If you need a lower false-positive rate, rebuild the filter with a lower `--false-positive-rate` value or a higher expected item count.
+The filter consists of 256-bit blocks with eight 32-bit lanes. One 64-bit hash selects a block and one bit in each lane, so a lookup reads only one small region of the bitset. Sizing uses the split-block false-positive model and rounds the bitset to a whole 32-byte block.
 
-`bf` limits a filter bitset to 2 GiB by default and at most 64 hashes per item. Sizing requests and state files outside those limits fail before allocation.
+If you insert more than `--expected-items`, the actual false-positive rate increases. `inspect` reports the set-bit count, fill ratio, and an estimated current false-positive rate derived from the inserted-item count and bitset size. If you need a lower false-positive rate, rebuild the filter with a lower `--false-positive-rate` value or a higher expected item count.
 
-`--no-size-limit` removes the 2 GiB application safeguard for any command that builds or reads a filter. It does not remove platform limits. Building, testing, and the first input to `union` still require the bitset to fit in memory; the operating system may terminate the process if memory is exhausted. The hash-count and state-file validation limits still apply.
+`bf` limits a filter bitset to 2 GiB by default. Sizing requests and state files outside the format and platform limits fail before allocation.
+
+`--no-size-limit` removes the 2 GiB application safeguard for any command that builds or reads a filter. It does not remove format or platform limits. Building, testing, and the first input to `union` still require the bitset to fit in memory; the operating system may terminate the process if memory is exhausted.
 
 ## State Files
 
@@ -194,11 +195,11 @@ If you insert more than `--expected-items`, the actual false-positive rate incre
 Current metadata:
 
 - magic: `BLM1`
-- version: `1`
-- hash: `fnv1a64-avalanche-v1`
-- bitset format: packed bits
+- version: `2`
+- hash: `xxhash64-v1`
+- bitset format: 256-bit split blocks with eight 32-bit lanes
 
-`bf` validates the header before reading the full payload. Unsupported versions, unsupported hash names, invalid bit counts, invalid hash counts, and invalid bitset sizes fail clearly. State-file arguments accept `-` for stdin; commands with multiple state inputs accept it at most once.
+Version 1 filters are not supported; rebuild them with the current `bf`. The command validates the header before reading the full payload. Unsupported versions, unsupported hash names, and invalid bitset sizes fail clearly. State-file arguments accept `-` for stdin; commands with multiple state inputs accept it at most once.
 
 ## Exit Status
 
@@ -210,5 +211,6 @@ Current metadata:
 
 - CLI flags and output live in `cmd/bf/main.go`.
 - Bloom filter behavior and binary state files live in `internal/bf`.
-- Shared input and hashing live in `internal/prob`.
-- `internal/bf.Magic`, `internal/bf.Version`, and `internal/prob.HashName` are compatibility boundaries.
+- Shared input handling lives in `internal/prob`.
+- `internal/bf.Magic`, `internal/bf.Version`, and `internal/bf.HashName` are compatibility boundaries.
+- The 100M-item serial and parallel benchmarks allocate about 201 MiB and populate the full filter; run them explicitly when measuring large-filter behavior.

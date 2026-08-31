@@ -48,7 +48,7 @@ The usual split is:
 
 - `cmd/<tool>/main.go` owns flags, help text, stdout/stderr formatting, and exit codes.
 - `internal/<tool>/` owns behavior that can be tested without shelling out.
-- `internal/prob/` owns shared line/NUL input handling, literal field selection, and stable hashing for probabilistic tools.
+- `internal/prob/` owns shared line/NUL input handling, literal field selection, and the stable hashing used by HLL and sampling.
 
 Use `hello` as the minimal reference for that shape.
 
@@ -130,7 +130,7 @@ It checks version aliases, help output, representative exit statuses, and the `h
 
 Probabilistic tools:
 
-- use the Go standard library only
+- use the Go standard library, except for Bloom filtering's direct XXHash64 dependency
 - read streams without loading full inputs unless the selected algorithm requires it
 - keep state-file compatibility constants in package code
 
@@ -138,7 +138,7 @@ Compatibility constants are the source of truth:
 
 - `internal/prob.HashName`
 - `internal/hll.Magic`, `internal/hll.Version`
-- `internal/bf.Magic`, `internal/bf.Version`
+- `internal/bf.Magic`, `internal/bf.Version`, `internal/bf.HashName`
 - `internal/kshape.Magic`, `internal/kshape.Version`, `internal/kshape.CanonicalFormat`
 
 Changing any of these can make old state files unreadable. Treat such changes as explicit file-format migrations.
