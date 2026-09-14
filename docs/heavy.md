@@ -92,6 +92,8 @@ The true observed count is between `count_lower_bound` and `count_estimate`. In 
 - `--exact`: use exact counts with unbounded memory
 - `--json`: write JSON output
 - `--tsv`: write tab-separated output
+- `-d`, `--delimiter VALUE`: literal field delimiter
+- `-f`, `--field N`: 1-based field to rank
 - `--trim`: trim surrounding whitespace
 - `--ignore-empty`: skip empty items
 - `-0`, `--nul`: read NUL-delimited items
@@ -110,7 +112,14 @@ Defaults:
 - empty lines are counted as a value
 - no structured parsing is performed
 
-Use tools such as `awk`, `cut`, or `jq` before `heavy` to select the field you want ranked.
+Rank a literal-delimited field directly in either counting mode:
+
+```sh
+heavy --top 20 -d $'\t' -f 2 events.tsv
+heavy --top 20 --exact -d $'\t' -f 2 events.tsv
+```
+
+The delimiter and field must be supplied together. Output items are the selected values. Trimming and empty-value filtering apply after selection. Missing fields fail; empty fields count unless `--ignore-empty` is set. Use `jq` or a CSV parser upstream for structured data.
 
 ## Approximate Mode
 

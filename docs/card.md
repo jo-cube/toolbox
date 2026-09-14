@@ -131,7 +131,7 @@ Separate counters report:
 - `empty`: empty strings
 - `total`: total records observed for that field
 
-For non-string JSON values, `card` hashes the JSON encoding of the value. JSON numbers retain their input spelling, so `1`, `1.0`, and `1e0` are distinct and large integers keep their full precision.
+For JSON values, `card` hashes the JSON encoding, preserving type distinctions: `1` and `"1"`, or `true` and `"true"`, are different values. Object key order does not affect cardinality. JSON numbers retain their input spelling, so `1`, `1.0`, and `1e0` are distinct and large integers keep their full precision.
 
 Malformed CSV or malformed JSON fails the command with a line-aware error where possible.
 

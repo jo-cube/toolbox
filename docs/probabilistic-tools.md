@@ -48,14 +48,16 @@ Defaults are conservative:
 
 ## Field Selection
 
-`bf build`, `bf test`, `bf dedupe`, and `sample --stable` can use one field from a literal-delimited record:
+`hll count`, `hll build`, `heavy`, `bf build`, `bf test`, `bf dedupe`, and `sample --stable` can use one field from a literal-delimited record:
 
 ```sh
+hll count -d $'\t' -f 2 events.tsv
+heavy -d $'\t' -f 2 events.tsv
 bf test -d $'\t' -f 2 users.bf events.tsv
 sample --rate 0.01 --stable -d $'\t' -f 2 events.tsv
 ```
 
-`-d`/`--delimiter` and `-f`/`--field` must be supplied together. Fields are 1-based. `bf test`, `bf dedupe`, and `sample` emit complete records even though the selected field controls the decision. This is intentionally not CSV or JSON parsing; use an upstream parser when quoting or structured data matters.
+`-d`/`--delimiter` and `-f`/`--field` must be supplied together. Fields are 1-based. Missing fields are input errors; empty fields are valid values. `--trim` and `--ignore-empty`, where supported, apply after field selection. `bf test`, `bf dedupe`, and `sample` emit complete records even though the selected field controls the decision. This is intentionally not CSV or JSON parsing; use an upstream parser when quoting or structured data matters.
 
 ## Output
 

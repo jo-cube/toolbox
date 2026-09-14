@@ -94,6 +94,13 @@ cat known-users.txt | bf build --expected-items 1000000 --false-positive-rate 0.
 cat candidates.txt | bf test users.bf
 ```
 
+Count or rank a tab-separated key without an extra extraction step:
+
+```sh
+hll count -d $'\t' -f 2 events.tsv
+heavy --top 20 -d $'\t' -f 2 events.tsv
+```
+
 Profile JSON field cardinality:
 
 ```sh
@@ -106,10 +113,11 @@ Find frequent API paths:
 awk '{print $7}' access.log | heavy --top 20
 ```
 
-Take a stable sample:
+Take a stable sample and its complementary cohort:
 
 ```sh
-sample --rate 0.01 --stable events.jsonl
+sample --rate 0.01 --stable events.jsonl > selected.jsonl
+sample --rate 0.01 --stable --invert events.jsonl > remaining.jsonl
 ```
 
 ## Behavior At A Glance

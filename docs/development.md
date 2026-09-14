@@ -48,7 +48,7 @@ The usual split is:
 
 - `cmd/<tool>/main.go` owns flags, help text, stdout/stderr formatting, and exit codes.
 - `internal/<tool>/` owns behavior that can be tested without shelling out.
-- `internal/prob/` owns shared line/NUL input handling, literal field selection, and the stable hashing used by HLL and sampling.
+- `internal/prob/` owns ordered file/stdin traversal, raw line/NUL records, value normalization and literal field selection, and the stable hashing used by HLL and sampling.
 
 Use `hello` as the minimal reference for that shape.
 
@@ -101,7 +101,7 @@ After building, run the small local CLI smoke suite:
 TOOLBOX_BIN="$PWD/bin" sh scripts/smoke-local.sh
 ```
 
-It checks version aliases, help output, representative exit statuses, and the `hello` output for the locally built binaries.
+It checks field-selection pipelines, complementary sampling, version aliases, help output, representative exit statuses, and the `hello` output for the locally built binaries.
 
 ## Implementation Notes
 
@@ -131,6 +131,7 @@ It checks version aliases, help output, representative exit statuses, and the `h
 Probabilistic tools:
 
 - use the Go standard library, except for Bloom filtering's direct XXHash64 dependency
+- share file/stdin traversal; sampling preserves raw records while HLL, Bloom filtering, and heavy-hitter counting normalize selected values
 - read streams without loading full inputs unless the selected algorithm requires it
 - estimate HLL cardinality from its register histogram using Ertl's improved raw estimator
 - keep state-file compatibility constants in package code

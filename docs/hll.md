@@ -121,6 +121,8 @@ Input options for `count` and `build`:
 
 - `--precision N`: HLL precision from `4` to `20`; default is `14`
 - `--json`: write JSON output for `count`
+- `-d`, `--delimiter VALUE`: literal field delimiter
+- `-f`, `--field N`: 1-based field to count or insert
 - `--trim`: trim surrounding whitespace
 - `--ignore-empty`: skip empty items
 - `-0`, `--nul`: read NUL-delimited items
@@ -141,7 +143,14 @@ Defaults:
 - empty lines are counted as a value
 - no structured parsing is performed
 
-Use tools such as `awk`, `cut`, or `jq` before `hll` to select the value you want counted.
+Select a literal-delimited field directly:
+
+```sh
+hll count -d $'\t' -f 2 events.tsv
+hll build -d $'\t' -f 2 events.tsv > users.hll
+```
+
+The delimiter and field must be supplied together. Trimming and empty-value filtering apply to the selected field. Missing fields fail; empty fields count unless `--ignore-empty` is set. Use `jq` or a CSV parser upstream for structured data.
 
 ## Accuracy And Memory
 
