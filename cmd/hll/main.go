@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -28,9 +29,9 @@ func main() {
 	var err error
 	switch os.Args[1] {
 	case "count":
-		err = count(os.Args[2:])
+		err = count(os.Args[2:], os.Stdin, os.Stdout)
 	case "build":
-		err = build(os.Args[2:])
+		err = build(os.Args[2:], os.Stdin, os.Stdout)
 	case "estimate":
 		err = estimate(os.Args[2:])
 	case "merge":
@@ -75,7 +76,7 @@ Run "hll <command> -h" for command-specific flags.
 `)
 }
 
-func count(args []string) error {
+func count(args []string, in io.Reader, out io.Writer) error {
 	fs := flag.NewFlagSet("hll count", flag.ExitOnError)
 	precision := fs.Uint("precision", uint(hll.DefaultP), "HLL precision, 4..20")
 	jsonOut := fs.Bool("json", false, "write JSON output")
@@ -85,7 +86,8 @@ func count(args []string) error {
 		fmt.Fprint(fs.Output(), `Usage: hll count [options] [file...]
 
 Read newline-delimited values from files or stdin and print an approximate unique count.
-Empty lines and surrounding whitespace are significant unless input flags change that.
+Use --delimiter and --field to count one field per record.
+Empty values and surrounding whitespace are significant unless input flags change that.
 
 Example:
   awk '{print $1}' access.log | hll count --ignore-empty
@@ -98,6 +100,9 @@ Options:
 		return err
 	}
 
+	if err := input.Fields.Validate(); err != nil {
+		return fmt.Errorf("usage: %w", err)
+	}
 	p, err := hll.Precision(*precision)
 	if err != nil {
 		return err
@@ -106,16 +111,16 @@ Options:
 	if err != nil {
 		return err
 	}
-	if err := prob.EachInput(fs.Args(), input, func(item []byte) error {
+	if err := prob.EachInputFrom(fs.Args(), in, input, func(item []byte) error {
 		s.Add(item)
 		return nil
 	}); err != nil {
 		return err
 	}
-	return writeEstimate(os.Stdout, s, *jsonOut)
+	return writeEstimate(out, s, *jsonOut)
 }
 
-func build(args []string) error {
+func build(args []string, in io.Reader, out io.Writer) error {
 	fs := flag.NewFlagSet("hll build", flag.ExitOnError)
 	precision := fs.Uint("precision", uint(hll.DefaultP), "HLL precision, 4..20")
 	var input prob.InputOptions
@@ -124,6 +129,7 @@ func build(args []string) error {
 		fmt.Fprint(fs.Output(), `Usage: hll build [options] [file...] > file.hll
 
 Read values from files or stdin and write a binary HyperLogLog sketch to stdout.
+Use --delimiter and --field to hash one field per record.
 Redirect stdout to save the sketch.
 
 Options:
@@ -134,6 +140,9 @@ Options:
 		return err
 	}
 
+	if err := input.Fields.Validate(); err != nil {
+		return fmt.Errorf("usage: %w", err)
+	}
 	p, err := hll.Precision(*precision)
 	if err != nil {
 		return err
@@ -142,13 +151,13 @@ Options:
 	if err != nil {
 		return err
 	}
-	if err := prob.EachInput(fs.Args(), input, func(item []byte) error {
+	if err := prob.EachInputFrom(fs.Args(), in, input, func(item []byte) error {
 		s.Add(item)
 		return nil
 	}); err != nil {
 		return err
 	}
-	return hll.Write(os.Stdout, s)
+	return hll.Write(out, s)
 }
 
 func estimate(args []string) error {
@@ -271,7 +280,7 @@ func countStdin(paths []string) int {
 	return count
 }
 
-func writeEstimate(out *os.File, s *hll.Sketch, jsonOut bool) error {
+func writeEstimate(out io.Writer, s *hll.Sketch, jsonOut bool) error {
 	m := s.Metadata()
 	if jsonOut {
 		return json.NewEncoder(out).Encode(struct {
@@ -279,7 +288,6 @@ func writeEstimate(out *os.File, s *hll.Sketch, jsonOut bool) error {
 			RelativeError float64 `json:"relative_error"`
 		}{m.ApproxUnique, m.RelativeError})
 	}
-	fmt.Fprintf(out, "approx_unique=%d\n", m.ApproxUnique)
-	fmt.Fprintf(out, "relative_error=%.2f%%\n", m.RelativeError*100)
-	return nil
+	_, err := fmt.Fprintf(out, "approx_unique=%d\nrelative_error=%.2f%%\n", m.ApproxUnique, m.RelativeError*100)
+	return err
 }

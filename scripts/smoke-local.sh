@@ -40,4 +40,13 @@ expect_status 2 "$bin/card"
 expect_status 2 "$bin/heavy" --top 0
 expect_status 2 "$bin/sample"
 
+[ "$(printf '1::a\n2::b\n3::a\n' | "$bin/hll" count -d :: -f 2 | head -n 1)" = "approx_unique=2" ]
+[ "$(printf '1::a\n2::b\n3::a\n' | "$bin/hll" build -d :: -f 2 | "$bin/hll" estimate - | head -n 1)" = "approx_unique=2" ]
+printf '1::a\n2::b\n3::a\n' | "$bin/heavy" --exact --top 1 -d :: -f 2 --tsv | grep -q '1[[:space:]]2[[:space:]]2[[:space:]]a'
+[ "$(printf 'a\nb\n' | "$bin/sample" --rate 0 --invert)" = "$(printf 'a\nb')" ]
+expect_status 2 "$bin/hll" count --field 2
+expect_status 2 "$bin/hll" build --delimiter ::
+expect_status 2 "$bin/heavy" --field 2
+expect_status 2 "$bin/sample" --count 1 --invert
+
 printf 'LOCAL CLI SMOKE TEST PASSED\n'

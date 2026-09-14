@@ -18,6 +18,7 @@ func main() {
 	rate := flag.Float64("rate", 0, "sample probability, 0..1")
 	count := flag.Int("count", 0, "reservoir sample size")
 	stable := flag.Bool("stable", false, "use deterministic hash sampling with --rate")
+	invert := flag.Bool("invert", false, "emit records excluded by the rate sample")
 	seed := flag.Int64("seed", 0, "random or stable hash seed")
 	nul := flag.Bool("nul", false, "read and write NUL-delimited records")
 	flag.BoolVar(nul, "0", false, "read and write NUL-delimited records")
@@ -26,7 +27,7 @@ func main() {
 
 	flag.Usage = func() {
 		name := filepath.Base(os.Args[0])
-		fmt.Fprintf(flag.CommandLine.Output(), `Usage: %s (--rate <p> [--stable] | --count <n>) [file...]
+		fmt.Fprintf(flag.CommandLine.Output(), `Usage: %s (--rate <p> [--stable] [--invert] | --count <n>) [file...]
 
 Emit a subset of input records while preserving emitted records exactly.
 Set exactly one of --rate or --count.
@@ -40,6 +41,7 @@ Examples:
 Notes:
   --rate samples each record independently unless --stable is set.
   --stable hashes the full record or a selected field without its trailing delimiter.
+  --invert emits the complementary rate sample; use --stable or the same --seed to repeat a split.
   -0 and --nul preserve NUL-delimited records instead of newline-delimited records.
   --count uses reservoir sampling and writes selected records after reading input.
 
@@ -64,6 +66,7 @@ Options:
 		Count:    *count,
 		CountSet: flagWasSet("count"),
 		Stable:   *stable,
+		Invert:   *invert,
 		Seed:     *seed,
 		SeedSet:  flagWasSet("seed"),
 		NUL:      *nul,

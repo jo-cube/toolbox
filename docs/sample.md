@@ -31,7 +31,7 @@ sample --version
 ## Synopsis
 
 ```sh
-sample --rate <p> [--stable] [--seed n] [--delimiter value --field n] [-0] [file...]
+sample --rate <p> [--stable] [--invert] [--seed n] [--delimiter value --field n] [-0] [file...]
 sample --count <n> [--seed n] [-0] [file...]
 ```
 
@@ -87,6 +87,19 @@ The same input record, rate, and seed produce the same decision across runs.
 
 Stable mode hashes the full record without its trailing newline or NUL delimiter. With `--delimiter` and `--field`, it hashes only the selected field while emitting the complete record. Records with the same selected value therefore receive the same sampling decision.
 
+### Complementary Rate Sampling
+
+`--invert` emits records excluded by the same rate sample. Create two disjoint cohorts with the same input, rate, seed, and field selection:
+
+```sh
+sample --rate 0.2 --stable -d $'\t' -f 2 events.tsv > holdout.tsv
+sample --rate 0.2 --stable --invert -d $'\t' -f 2 events.tsv > training.tsv
+```
+
+A selected key stays on the same side even if records are reordered or split across files. Random rate sampling also supports inversion; repeat the same input order and explicit `--seed` for complementary runs. Without a seed, separate random runs are independent.
+
+Inverted rate `0` emits everything; inverted rate `1` emits nothing. Inversion is unavailable with `--count`, which retains only the reservoir.
+
 ### Reservoir Sampling
 
 `--count N` keeps up to `N` records from the stream without knowing the stream length in advance.
@@ -112,6 +125,7 @@ With `-0` or `--nul`, records and emitted delimiters are NUL-separated instead.
 - `--rate P`: sample each record with probability `P`, from `0` to `1`
 - `--count N`: keep up to a positive `N` records using reservoir sampling
 - `--stable`: use deterministic hash sampling with `--rate`
+- `--invert`: emit records excluded by the rate sample
 - `--seed N`: seed random modes or stable hashing
 - `-d`, `--delimiter VALUE`: literal field delimiter for stable sampling
 - `-f`, `--field N`: 1-based field used for stable sampling
@@ -121,7 +135,7 @@ With `-0` or `--nul`, records and emitted delimiters are NUL-separated instead.
 Invalid combinations fail:
 
 - `--rate` with `--count`
-- `--stable` with `--count`
+- `--stable` or `--invert` with `--count`
 - a non-positive `--count`
 - neither `--rate` nor `--count`
 - field selection without `--stable`
@@ -139,4 +153,4 @@ Invalid combinations fail:
 - CLI flags live in `cmd/sample/main.go`.
 - Sampling behavior lives in `internal/sample`.
 - Stable hashing uses `internal/prob.Hash64`.
-- Preserve records exactly. Do not switch to the shared trimmed stream reader for this tool.
+- Preserve records exactly through `internal/prob.EachRecordFrom`; normalization is for value-processing tools.

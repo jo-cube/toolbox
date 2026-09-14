@@ -131,7 +131,7 @@ func (s *Shell) cmdScan(args []string) error {
 	}
 
 	w := tabwriter.NewWriter(s.out, 0, 0, 2, ' ', 0)
-	result, err := s.iterate(prefix, limit, func(key, value []byte) error {
+	result, err := s.iterate(prefix, limit, true, func(key, value []byte) error {
 		_, err := fmt.Fprintf(w, "%s\t%s\n", formatBytes(key), formatBytes(value))
 		return err
 	})
@@ -157,7 +157,7 @@ func (s *Shell) cmdKeys(args []string) error {
 		return err
 	}
 
-	result, err := s.iterate(prefix, limit, func(key, _ []byte) error {
+	result, err := s.iterate(prefix, limit, false, func(key, _ []byte) error {
 		_, err := fmt.Fprintln(s.out, formatBytes(key))
 		return err
 	})
@@ -189,7 +189,7 @@ func (s *Shell) cmdCount(args []string) error {
 		}
 	}
 
-	result, err := s.iterate(prefix, 0, func(_, _ []byte) error { return nil })
+	result, err := s.iterate(prefix, 0, false, func(_, _ []byte) error { return nil })
 	if err != nil {
 		return err
 	}

@@ -30,6 +30,7 @@ func main() {
 		fmt.Fprintf(flag.CommandLine.Output(), `Usage: %s [options] [file...]
 
 Find frequent values in newline-delimited input.
+Use --delimiter and --field to rank one field per record.
 Default mode uses bounded-memory approximate counts. Use --exact only when all distinct values fit in memory.
 
 Examples:
@@ -61,6 +62,11 @@ Options:
 	}
 	if *capacity != 0 && *capacity < *top {
 		fmt.Fprintln(os.Stderr, "heavy: capacity must be at least top")
+		os.Exit(2)
+	}
+
+	if err := input.Fields.Validate(); err != nil {
+		fmt.Fprintf(os.Stderr, "heavy: %v\n", err)
 		os.Exit(2)
 	}
 

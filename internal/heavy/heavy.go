@@ -92,12 +92,12 @@ func approximate(paths []string, cfg Config) ([]Result, error) {
 	tracked := map[string]*trackedItem{}
 	var items minItems
 	if err := prob.EachInput(paths, cfg.Input, func(item []byte) error {
-		key := string(item)
-		if existing, ok := tracked[key]; ok {
+		if existing, ok := tracked[string(item)]; ok {
 			existing.count++
 			heap.Fix(&items, existing.index)
 			return nil
 		}
+		key := string(item)
 		if len(tracked) < cfg.Capacity {
 			entry := &trackedItem{item: key, count: 1}
 			tracked[key] = entry
@@ -105,13 +105,13 @@ func approximate(paths []string, cfg Config) ([]Result, error) {
 			return nil
 		}
 
-		replaced := heap.Pop(&items).(*trackedItem)
+		replaced := items[0]
 		delete(tracked, replaced.item)
 		replaced.error = replaced.count
 		replaced.item = key
 		replaced.count++
 		tracked[key] = replaced
-		heap.Push(&items, replaced)
+		heap.Fix(&items, 0)
 		return nil
 	}); err != nil {
 		return nil, err
