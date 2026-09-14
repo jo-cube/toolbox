@@ -2,8 +2,10 @@ package heavy
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -116,6 +118,49 @@ func BenchmarkRepeatedValues(b *testing.B) {
 	for b.Loop() {
 		if _, err := Run([]string{path}, Config{Top: 1}); err != nil {
 			b.Fatal(err)
+		}
+	}
+}
+
+func TestApproximateMatchesSpaceSavingReference(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewSource(1))
+	input := make([]string, 2000)
+	for i := range input {
+		input[i] = fmt.Sprintf("key-%02d", rng.Intn(30))
+	}
+	path := writeInput(t, strings.Join(input, "\n"))
+	for _, capacity := range []int{1, 2, 7, 40} {
+		tracked := map[string]Result{}
+		for _, item := range input {
+			entry, exists := tracked[item]
+			if !exists && len(tracked) == capacity {
+				var least Result
+				first := true
+				for _, candidate := range tracked {
+					if first || candidate.CountEstimate < least.CountEstimate || candidate.CountEstimate == least.CountEstimate && candidate.Item < least.Item {
+						least, first = candidate, false
+					}
+				}
+				delete(tracked, least.Item)
+				entry.CountEstimate = least.CountEstimate
+			}
+			entry.Item = item
+			entry.CountEstimate++
+			entry.CountLowerBound++
+			tracked[item] = entry
+		}
+		var want []Result
+		for _, entry := range tracked {
+			want = append(want, entry)
+		}
+		want = rank(want, capacity)
+		got, err := Run([]string{path}, Config{Top: capacity, Capacity: capacity})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("capacity %d: got %#v, want %#v", capacity, got, want)
 		}
 	}
 }

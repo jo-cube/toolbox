@@ -105,13 +105,13 @@ func approximate(paths []string, cfg Config) ([]Result, error) {
 			return nil
 		}
 
-		replaced := heap.Pop(&items).(*trackedItem)
+		replaced := items[0]
 		delete(tracked, replaced.item)
 		replaced.error = replaced.count
 		replaced.item = key
 		replaced.count++
 		tracked[key] = replaced
-		heap.Push(&items, replaced)
+		heap.Fix(&items, 0)
 		return nil
 	}); err != nil {
 		return nil, err
