@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jo-cube/toolbox/internal/prob"
 )
 
 const repeatedLetters = `b
@@ -84,4 +86,36 @@ func writeInput(t *testing.T, content string) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func TestFieldRankingWorksInBothModes(t *testing.T) {
+	t.Parallel()
+	path := writeInput(t, "1:: a ::x\x002::b::y\x003:: a ::z\x004:: ::empty\x005::b\x006::a")
+	for _, exact := range []bool{false, true} {
+		got, err := Run([]string{path}, Config{
+			Top: 2, Exact: exact,
+			Input: prob.InputOptions{NUL: true, Trim: true, IgnoreEmpty: true, Fields: prob.FieldOptions{Delimiter: "::", Field: 2}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 2 || got[0].Item != "a" || got[0].CountEstimate != 3 || got[0].CountLowerBound != 3 || got[1].Item != "b" || got[1].CountEstimate != 2 {
+			t.Fatalf("exact=%v: results = %#v", exact, got)
+		}
+	}
+}
+
+func BenchmarkRepeatedValues(b *testing.B) {
+	path := filepath.Join(b.TempDir(), "input")
+	input := strings.Repeat("dominant-value\n", 10000)
+	if err := os.WriteFile(path, []byte(input), 0600); err != nil {
+		b.Fatal(err)
+	}
+	b.SetBytes(int64(len(input)))
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, err := Run([]string{path}, Config{Top: 1}); err != nil {
+			b.Fatal(err)
+		}
+	}
 }
