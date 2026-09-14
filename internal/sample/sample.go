@@ -19,6 +19,7 @@ type Config struct {
 	Count    int
 	CountSet bool
 	Stable   bool
+	Invert   bool
 	Seed     int64
 	SeedSet  bool
 	NUL      bool
@@ -39,6 +40,9 @@ func Validate(cfg Config) error {
 	}
 	if hasCount && cfg.Count <= 0 {
 		return fmt.Errorf("count must be a positive integer")
+	}
+	if cfg.Invert && hasCount {
+		return fmt.Errorf("--invert can only be used with --rate")
 	}
 	if cfg.Stable && hasCount {
 		return fmt.Errorf("--stable can only be used with --rate")
@@ -77,8 +81,8 @@ func RunFrom(paths []string, cfg Config, out io.Writer, stdin io.Reader) error {
 
 func rateRandom(paths []string, cfg Config, out io.Writer, stdin io.Reader) error {
 	rng := rand.New(rand.NewSource(seed(cfg)))
-	return eachRaw(paths, stdin, delimiter(cfg), func(record []byte) error {
-		if rng.Float64() < cfg.Rate {
+	return prob.EachRecordFrom(paths, stdin, cfg.NUL, func(record []byte) error {
+		if (rng.Float64() < cfg.Rate) != cfg.Invert {
 			_, err := out.Write(record)
 			return err
 		}
@@ -89,7 +93,7 @@ func rateRandom(paths []string, cfg Config, out io.Writer, stdin io.Reader) erro
 func rateStable(paths []string, cfg Config, out io.Writer, stdin io.Reader) error {
 	threshold := uint64(cfg.Rate * float64(math.MaxUint64))
 	delim := delimiter(cfg)
-	return eachRaw(paths, stdin, delim, func(record []byte) error {
+	return prob.EachRecordFrom(paths, stdin, cfg.NUL, func(record []byte) error {
 		key := record
 		if len(key) > 0 && key[len(key)-1] == delim {
 			key = key[:len(key)-1]
@@ -101,7 +105,8 @@ func rateStable(paths []string, cfg Config, out io.Writer, stdin io.Reader) erro
 		if err != nil {
 			return err
 		}
-		if cfg.Rate >= 1 || prob.Hash64(key, uint64(cfg.Seed)) < threshold {
+		selected := cfg.Rate >= 1 || prob.Hash64(key, uint64(cfg.Seed)) < threshold
+		if selected != cfg.Invert {
 			_, err := out.Write(record)
 			return err
 		}
@@ -118,7 +123,7 @@ func reservoir(paths []string, cfg Config, out io.Writer, stdin io.Reader) error
 	var items []selected
 	var seen int64
 
-	if err := eachRaw(paths, stdin, delimiter(cfg), func(record []byte) error {
+	if err := prob.EachRecordFrom(paths, stdin, cfg.NUL, func(record []byte) error {
 		seen++
 		if len(items) < cfg.Count {
 			items = append(items, selected{record: append([]byte(nil), record...), order: seen})
@@ -155,63 +160,4 @@ func delimiter(cfg Config) byte {
 		return 0
 	}
 	return '\n'
-}
-
-func eachRaw(paths []string, stdin io.Reader, delim byte, fn func([]byte) error) error {
-	if len(paths) == 0 {
-		return eachRawReader("<stdin>", stdin, delim, fn)
-	}
-	stdinUsed := false
-	for _, path := range paths {
-		if path == "-" {
-			if stdinUsed {
-				return fmt.Errorf("stdin may be read only once")
-			}
-			stdinUsed = true
-			if err := eachRawReader("<stdin>", stdin, delim, fn); err != nil {
-				return err
-			}
-			continue
-		}
-		f, err := os.Open(path)
-		if err != nil {
-			return fmt.Errorf("open %s: %w", path, err)
-		}
-		err = eachRawReader(path, f, delim, fn)
-		closeErr := f.Close()
-		if err != nil {
-			return err
-		}
-		if closeErr != nil {
-			return fmt.Errorf("close %s: %w", path, closeErr)
-		}
-	}
-	return nil
-}
-
-func eachRawReader(name string, r io.Reader, delim byte, fn func([]byte) error) error {
-	br := bufio.NewReader(r)
-	var continued []byte
-	for {
-		record, err := br.ReadSlice(delim)
-		if err == bufio.ErrBufferFull {
-			continued = append(continued, record...)
-			continue
-		}
-		if len(continued) != 0 {
-			record = append(continued, record...)
-			continued = nil
-		}
-		if len(record) > 0 {
-			if err := fn(record); err != nil {
-				return err
-			}
-		}
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("read %s: %w", name, err)
-		}
-	}
 }

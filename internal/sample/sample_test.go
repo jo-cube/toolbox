@@ -241,3 +241,56 @@ func writeInput(t *testing.T, content string) string {
 	}
 	return path
 }
+
+func TestInvertedRateSamplePartitionsRecords(t *testing.T) {
+	t.Parallel()
+	for _, stable := range []bool{false, true} {
+		for _, nul := range []bool{false, true} {
+			for _, rate := range []float64{0, 0.4, 1} {
+				cfg := Config{Rate: rate, RateSet: true, Stable: stable, Seed: 7, SeedSet: true, NUL: nul}
+				if stable {
+					cfg.Fields = prob.FieldOptions{Delimiter: "::", Field: 2}
+				}
+				delim := "\r\n"
+				if nul {
+					delim = "\x00"
+				}
+				var records []string
+				for i := range 100 {
+					records = append(records, fmt.Sprintf("%d::cohort-%d:: payload %s", i, i%10, delim))
+				}
+				records[len(records)-1] = strings.TrimSuffix(records[len(records)-1], delim)
+				input := strings.Join(records, "")
+				var selected, rejected bytes.Buffer
+				if err := RunFrom(nil, cfg, &selected, strings.NewReader(input)); err != nil {
+					t.Fatal(err)
+				}
+				cfg.Invert = true
+				if err := RunFrom(nil, cfg, &rejected, strings.NewReader(input)); err != nil {
+					t.Fatal(err)
+				}
+				a, b := selected.String(), rejected.String()
+				for _, record := range records {
+					inA, inB := strings.HasPrefix(a, record), strings.HasPrefix(b, record)
+					if inA == inB {
+						t.Fatalf("stable=%v nul=%v rate=%v: record missing or duplicated: %q", stable, nul, rate, record)
+					}
+					if inA {
+						a = strings.TrimPrefix(a, record)
+					} else {
+						b = strings.TrimPrefix(b, record)
+					}
+				}
+				if a != "" || b != "" || (rate == 0 && selected.Len() != 0) || (rate == 1 && rejected.Len() != 0) {
+					t.Fatal("unexpected output in complementary sample")
+				}
+				if rate == 0.4 && (selected.Len() == 0 || rejected.Len() == 0) {
+					t.Fatal("split did not exercise both decisions")
+				}
+			}
+		}
+	}
+	if err := Validate(Config{Count: 2, Invert: true}); err == nil {
+		t.Fatal("accepted inverted reservoir sampling")
+	}
+}
