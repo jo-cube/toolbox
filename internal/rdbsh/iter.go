@@ -11,7 +11,7 @@ type iterationResult struct {
 	Limited bool
 }
 
-func (s *Shell) iterate(prefix []byte, limit int, fn func(key, value []byte) error) (iterationResult, error) {
+func (s *Shell) iterate(prefix []byte, limit int, readValues bool, fn func(key, value []byte) error) (iterationResult, error) {
 	var result iterationResult
 
 	it := s.newIterator()
@@ -29,7 +29,11 @@ func (s *Shell) iterate(prefix []byte, limit int, fn func(key, value []byte) err
 			break
 		}
 
-		if err := fn(key, it.Value()); err != nil {
+		var value []byte
+		if readValues {
+			value = it.Value()
+		}
+		if err := fn(key, value); err != nil {
 			return result, err
 		}
 		result.Count++

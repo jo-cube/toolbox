@@ -1,6 +1,7 @@
 package rdbsh
 
 import (
+	"bufio"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -105,7 +106,7 @@ func (s *Shell) exportCSV(writer io.Writer, prefix []byte) (int, error) {
 		return 0, err
 	}
 
-	result, err := s.iterate(prefix, 0, func(key, value []byte) error {
+	result, err := s.iterate(prefix, 0, true, func(key, value []byte) error {
 		return csvWriter.Write([]string{formatExportBytes(key), formatExportBytes(value)})
 	})
 	if err != nil {
@@ -118,41 +119,36 @@ func (s *Shell) exportCSV(writer io.Writer, prefix []byte) (int, error) {
 	return result.Count, nil
 }
 
-func (s *Shell) exportJSON(writer io.Writer, prefix []byte) (int, error) {
+func (s *Shell) exportJSON(out io.Writer, prefix []byte) (int, error) {
+	writer := bufio.NewWriter(out)
+	encoder := json.NewEncoder(writer)
 	if _, err := fmt.Fprintln(writer, "["); err != nil {
 		return 0, err
 	}
 
 	first := true
-	result, err := s.iterate(prefix, 0, func(key, value []byte) error {
-		entry, err := json.Marshal(struct {
-			Key   string `json:"key"`
-			Value string `json:"value"`
-		}{
-			Key:   formatExportBytes(key),
-			Value: formatExportBytes(value),
-		})
-		if err != nil {
-			return err
-		}
+	result, err := s.iterate(prefix, 0, true, func(key, value []byte) error {
 		if !first {
 			if _, err := fmt.Fprintln(writer, ","); err != nil {
 				return err
 			}
 		}
 		first = false
-		if _, err := writer.Write(entry); err != nil {
-			return err
-		}
-		if _, err := fmt.Fprintln(writer); err != nil {
-			return err
-		}
-		return nil
+		return encoder.Encode(struct {
+			Key   string `json:"key"`
+			Value string `json:"value"`
+		}{
+			Key:   formatExportBytes(key),
+			Value: formatExportBytes(value),
+		})
 	})
 	if err != nil {
 		return 0, err
 	}
 	if _, err := fmt.Fprintln(writer, "]"); err != nil {
+		return 0, err
+	}
+	if err := writer.Flush(); err != nil {
 		return 0, err
 	}
 	return result.Count, nil
