@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -71,6 +72,7 @@ func runCSV(paths []string, cfg Config, stdin io.Reader) ([]Profile, error) {
 	}
 	return finish(counters, prob.EachFile(paths, stdin, func(name string, r io.Reader) error {
 		cr := csv.NewReader(r)
+		cr.ReuseRecord = true
 		header, err := cr.Read()
 		if err != nil {
 			return fmt.Errorf("%s: read header: %w", name, err)
@@ -116,11 +118,20 @@ func runDelimited(paths []string, cfg Config, stdin io.Reader) ([]Profile, error
 	if err != nil {
 		return nil, err
 	}
+	order := make([]int, len(indexes))
+	for i := range order {
+		order[i] = i
+	}
+	sort.Slice(order, func(i, j int) bool { return indexes[order[i]] < indexes[order[j]] })
 	return finish(counters, eachLine(paths, stdin, func(line string) error {
-		parts := strings.Split(line, cfg.Delimiter)
-		for i, idx := range indexes {
-			value, ok := recordValue(parts, idx)
-			addValue(counters[i], value, ok)
+		column, more := -1, true
+		var value string
+		for _, i := range order {
+			for more && column < indexes[i] {
+				value, line, more = strings.Cut(line, cfg.Delimiter)
+				column++
+			}
+			addValue(counters[i], value, column == indexes[i])
 		}
 		return nil
 	}))

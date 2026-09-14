@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -143,5 +145,43 @@ func TestCSVFilesEachUseTheirOwnHeader(t *testing.T) {
 	profiles, err := RunFrom([]string{path, "-"}, Config{Mode: "csv", Columns: []string{"id"}}, strings.NewReader("country,id\nCA,u2\nUS,u1\n"))
 	if err != nil || len(profiles) != 1 || profiles[0].ApproxUnique != 2 || profiles[0].Total != 3 {
 		t.Fatalf("profiles = %#v, error = %v", profiles, err)
+	}
+}
+
+func TestDelimitedSelectionMatchesSplit(t *testing.T) {
+	t.Parallel()
+	columns := []string{"4", "2", "1", "2", strconv.Itoa(int(^uint(0) >> 1)), "3"}
+	for _, delimiter := range []string{"::", "aa", "\t", "💠"} {
+		records := []string{
+			strings.Join([]string{"a", "", "c", ""}, delimiter),
+			strings.Join([]string{"", "b"}, delimiter),
+			"solo", "",
+			"last" + delimiter,
+			strings.Join([]string{strings.Repeat("x", 64<<10), "z", ""}, delimiter),
+		}
+		cfg := Config{Mode: "delimiter", Delimiter: delimiter, Columns: columns, Precision: 8}
+		got, err := RunFrom(nil, cfg, strings.NewReader(strings.Join(records, "\r\n")+"\r"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		counters, err := newCounters(columns, cfg.Precision)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, record := range records {
+			parts := strings.Split(record, delimiter)
+			for i, col := range columns {
+				index, _ := strconv.Atoi(col)
+				value, ok := recordValue(parts, index-1)
+				addValue(counters[i], value, ok)
+			}
+		}
+		want, err := finish(counters, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("delimiter %q: got %#v, want %#v", delimiter, got, want)
+		}
 	}
 }
