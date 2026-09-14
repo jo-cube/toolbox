@@ -112,3 +112,36 @@ func writeInput(t *testing.T, content string) string {
 	}
 	return path
 }
+
+func TestJSONProfileDistinguishesTypesAndNormalizesObjects(t *testing.T) {
+	t.Parallel()
+	input := `{"v":1}
+{"v":"1"}
+{"v":true}
+{"v":"true"}
+{"v":[]}
+{"v":"[]"}
+{"v":{"a":1,"b":2}}
+{"v":{"b":2,"a":1}}
+{"v":null}
+{"v":""}
+{}
+`
+	profiles, err := RunFrom(nil, Config{Mode: "json", JSONPaths: []string{".v"}}, strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := profiles[0]
+	if got.ApproxUnique != 7 || got.Nulls != 1 || got.Empty != 1 || got.Missing != 1 || got.Total != 11 {
+		t.Fatalf("profile = %#v", got)
+	}
+}
+
+func TestCSVFilesEachUseTheirOwnHeader(t *testing.T) {
+	t.Parallel()
+	path := writeInput(t, "id,country\nu1,US\n")
+	profiles, err := RunFrom([]string{path, "-"}, Config{Mode: "csv", Columns: []string{"id"}}, strings.NewReader("country,id\nCA,u2\nUS,u1\n"))
+	if err != nil || len(profiles) != 1 || profiles[0].ApproxUnique != 2 || profiles[0].Total != 3 {
+		t.Fatalf("profiles = %#v, error = %v", profiles, err)
+	}
+}

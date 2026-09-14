@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/jo-cube/toolbox/internal/hll"
+	"github.com/jo-cube/toolbox/internal/prob"
 )
 
 type Config struct {
@@ -68,7 +69,7 @@ func runCSV(paths []string, cfg Config, stdin io.Reader) ([]Profile, error) {
 	if err != nil {
 		return nil, err
 	}
-	return finish(counters, eachPath(paths, stdin, func(name string, r io.Reader) error {
+	return finish(counters, prob.EachFile(paths, stdin, func(name string, r io.Reader) error {
 		cr := csv.NewReader(r)
 		header, err := cr.Read()
 		if err != nil {
@@ -160,7 +161,9 @@ func runJSON(paths []string, cfg Config, stdin io.Reader) ([]Profile, error) {
 				counters[i].total++
 				continue
 			}
-			addAny(counters[i], value)
+			if err := addAny(counters[i], value); err != nil {
+				return err
+			}
 		}
 		return nil
 	}))
@@ -209,26 +212,22 @@ func addValue(c *counter, value string, ok bool) {
 	c.sketch.Add([]byte(value))
 }
 
-func addAny(c *counter, value any) {
+func addAny(c *counter, value any) error {
 	c.total++
 	if value == nil {
 		c.nulls++
-		return
+		return nil
 	}
-	if s, ok := value.(string); ok {
-		if s == "" {
-			c.empty++
-			return
-		}
-		c.sketch.Add([]byte(s))
-		return
+	if s, ok := value.(string); ok && s == "" {
+		c.empty++
+		return nil
 	}
 	encoded, err := json.Marshal(value)
 	if err != nil {
-		c.sketch.Add([]byte(fmt.Sprint(value)))
-		return
+		return err
 	}
 	c.sketch.Add(encoded)
+	return nil
 }
 
 func recordValue(record []string, idx int) (string, bool) {
@@ -279,40 +278,8 @@ func lookup(value any, path []string) (any, bool) {
 	return current, true
 }
 
-func eachPath(paths []string, stdin io.Reader, fn func(string, io.Reader) error) error {
-	if len(paths) == 0 {
-		return fn("<stdin>", stdin)
-	}
-	stdinUsed := false
-	for _, path := range paths {
-		if path == "-" {
-			if stdinUsed {
-				return fmt.Errorf("stdin may be read only once")
-			}
-			stdinUsed = true
-			if err := fn("<stdin>", stdin); err != nil {
-				return err
-			}
-			continue
-		}
-		f, err := os.Open(path)
-		if err != nil {
-			return fmt.Errorf("open %s: %w", path, err)
-		}
-		err = fn(path, f)
-		closeErr := f.Close()
-		if err != nil {
-			return err
-		}
-		if closeErr != nil {
-			return fmt.Errorf("close %s: %w", path, closeErr)
-		}
-	}
-	return nil
-}
-
 func eachLine(paths []string, stdin io.Reader, fn func(string) error) error {
-	return eachPath(paths, stdin, func(name string, r io.Reader) error {
+	return prob.EachFile(paths, stdin, func(name string, r io.Reader) error {
 		br := bufio.NewReader(r)
 		line := 0
 		for {
