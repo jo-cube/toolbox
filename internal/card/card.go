@@ -2,6 +2,7 @@ package card
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -123,15 +124,31 @@ func runDelimited(paths []string, cfg Config, stdin io.Reader) ([]Profile, error
 		order[i] = i
 	}
 	sort.Slice(order, func(i, j int) bool { return indexes[order[i]] < indexes[order[j]] })
-	return finish(counters, eachLine(paths, stdin, func(line string) error {
-		column, more := -1, true
-		var value string
-		for _, i := range order {
-			for more && column < indexes[i] {
-				value, line, more = strings.Cut(line, cfg.Delimiter)
-				column++
+	delimiter := []byte(cfg.Delimiter)
+	return finish(counters, prob.EachFile(paths, stdin, func(name string, r io.Reader) error {
+		scanner := bufio.NewScanner(r)
+		scanner.Buffer(nil, int(^uint(0)>>1))
+		scanner.Split(func(data []byte, atEOF bool) (int, []byte, error) {
+			// Match eachLine: a final bare CR is not a record.
+			if atEOF && len(data) == 1 && data[0] == '\r' {
+				return 1, nil, nil
 			}
-			addValue(counters[i], value, column == indexes[i])
+			return bufio.ScanLines(data, atEOF)
+		})
+		for scanner.Scan() {
+			line := scanner.Bytes()
+			column, more := -1, true
+			var value []byte
+			for _, i := range order {
+				for more && column < indexes[i] {
+					value, line, more = bytes.Cut(line, delimiter)
+					column++
+				}
+				addValue(counters[i], string(value), column == indexes[i])
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
 		}
 		return nil
 	}))

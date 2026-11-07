@@ -52,3 +52,49 @@ func BenchmarkProfile(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkProfileLongDelimited(b *testing.B) {
+	for _, size := range []int{8 << 10, 64 << 10} {
+		var rows strings.Builder
+		for i := range 256 {
+			fmt.Fprintf(&rows, "%d,%s,last\n", i, strings.Repeat("x", size))
+		}
+		input := rows.String()
+		for _, column := range []string{"1", "3"} {
+			b.Run(fmt.Sprintf("bytes=%d/column=%s", size, column), func(b *testing.B) {
+				cfg := Config{Mode: "delimiter", Delimiter: ",", Columns: []string{column}}
+				b.SetBytes(int64(len(input)))
+				b.ReportAllocs()
+				for b.Loop() {
+					profiles, err := RunFrom(nil, cfg, strings.NewReader(input))
+					if err != nil {
+						b.Fatal(err)
+					}
+					if profiles[0].Total != 256 {
+						b.Fatal(profiles[0])
+					}
+				}
+			})
+		}
+	}
+}
+
+func BenchmarkProfileJSON(b *testing.B) {
+	var rows strings.Builder
+	for i := range 10000 {
+		fmt.Fprintf(&rows, "{\"user_id\":%d,\"event\":\"request\",\"metadata\":{\"country\":\"US\"}}\n", i)
+	}
+	input := rows.String()
+	cfg := Config{Mode: "json", JSONPaths: []string{".user_id", ".metadata.country"}}
+	b.SetBytes(int64(len(input)))
+	b.ReportAllocs()
+	for b.Loop() {
+		profiles, err := RunFrom(nil, cfg, strings.NewReader(input))
+		if err != nil {
+			b.Fatal(err)
+		}
+		if profiles[0].Total != 10000 {
+			b.Fatal(profiles[0])
+		}
+	}
+}
