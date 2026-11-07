@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	internalbf "github.com/jo-cube/toolbox/internal/bf"
@@ -94,6 +95,23 @@ func TestBuildWarnsWhenExpectedItemsAreExceeded(t *testing.T) {
 	}
 	if _, err := internalbf.Read(&out); err != nil {
 		t.Fatalf("build output is not a filter: %v", err)
+	}
+}
+
+func TestBuildAndDedupeRejectCollisionLimitedSizing(t *testing.T) {
+	t.Parallel()
+	for _, run := range []func([]string, io.Reader, io.Writer, io.Writer) error{build, dedupe} {
+		for _, noLimit := range []bool{false, true} {
+			args := []string{"--expected-items", "1", "--false-positive-rate", "1e-12"}
+			if noLimit {
+				args = append(args, "--no-size-limit")
+			}
+			var out, errOut bytes.Buffer
+			err := run(args, strings.NewReader("alpha\n"), &out, &errOut)
+			if err == nil || !strings.Contains(err.Error(), "false-positive-rate") || !strings.Contains(err.Error(), "collision lower bound") || out.Len() != 0 {
+				t.Fatalf("error = %v, stdout bytes = %d; want sizing error and no output", err, out.Len())
+			}
+		}
 	}
 }
 

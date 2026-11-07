@@ -49,6 +49,8 @@ expect_status 2 "$bin/hll" count --field 2
 expect_status 2 "$bin/hll" build --delimiter ::
 expect_status 2 "$bin/heavy" --field 2
 expect_status 2 "$bin/sample" --count 1 --invert
+expect_status 2 "$bin/bf" build --expected-items 1 --false-positive-rate 1e-12 </dev/null
+expect_status 2 "$bin/bf" dedupe --expected-items 1 --false-positive-rate 1e-12 --no-size-limit </dev/null
 
 expect_status 1 sh -c 'printf "a\n" | "$1" --tsv 1<&0' sh "$bin/heavy"
 expect_status 1 sh -c 'printf "a\n" | "$1" build | "$1" inspect - 1<&0' sh "$bin/hll"

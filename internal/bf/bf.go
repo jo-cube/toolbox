@@ -86,7 +86,25 @@ func sizing(expected uint64, rate float64, maxBytes uint64) (uint64, error) {
 	if byteCount > uint64(maxInt()) {
 		return 0, fmt.Errorf("filter requires %d bytes, exceeding this platform's allocation limit", byteCount)
 	}
+	blocks := byteCount / blockBytes
+	if lower := collisionLowerBound(expected, blocks); rate < lower {
+		return 0, fmt.Errorf("false-positive-rate %g is below the collision lower bound %g for %d expected distinct items in %d blocks", rate, lower, expected, blocks)
+	}
 	return byteCount, nil
+}
+
+func collisionLowerBound(expected, blocks uint64) float64 {
+	// Each block receives at least floor(2^32/blocks) upper-hash values.
+	p := math.Ldexp(float64((uint64(1)<<32)/blocks), -64)
+	if expected == 1 {
+		return p
+	}
+	// For independent uniform hashes, 1-(1-p)^n >= np/(1+(n-1)p).
+	// Sizing limits keep n exactly representable; round the bound downward.
+	numerator := math.Nextafter(float64(expected)*p, 0)
+	others := math.Nextafter(float64(expected-1)*p, math.Inf(1))
+	denominator := math.Nextafter(1+others, math.Inf(1))
+	return math.Nextafter(numerator/denominator, 0)
 }
 
 func splitBlockBitsPerItem(rate float64) float64 {
