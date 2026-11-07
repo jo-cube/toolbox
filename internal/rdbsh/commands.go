@@ -1,6 +1,7 @@
 package rdbsh
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"strconv"
@@ -155,29 +156,38 @@ func (s *Shell) cmdScan(args []string) error {
 	return nil
 }
 
-func (s *Shell) cmdKeys(args []string) error {
+func (s *Shell) cmdKeys(args []string) (err error) {
 	prefix, limit, err := parsePrefixAndLimit(args, "usage: keys [prefix] [limit]")
 	if err != nil {
 		return err
 	}
 
+	w := bufio.NewWriter(s.out)
+	defer func() {
+		if flushErr := w.Flush(); err == nil {
+			err = flushErr
+		}
+	}()
+
 	result, err := s.iterate(prefix, limit, false, func(key, _ []byte) error {
-		_, err := fmt.Fprintln(s.out, formatBytes(key))
-		return err
+		if _, err := w.WriteString(formatBytes(key)); err != nil {
+			return err
+		}
+		return w.WriteByte('\n')
 	})
 	if err != nil {
 		return err
 	}
 	if result.Count == 0 {
-		_, err := fmt.Fprintln(s.out, "(no keys found)")
+		_, err := fmt.Fprintln(w, "(no keys found)")
 		return err
 	}
 	if result.Limited {
-		if _, err := fmt.Fprintf(s.out, "... (limit %d reached)\n", limit); err != nil {
+		if _, err := fmt.Fprintf(w, "... (limit %d reached)\n", limit); err != nil {
 			return err
 		}
 	}
-	_, err = fmt.Fprintf(s.out, "(%d keys shown)\n", result.Count)
+	_, err = fmt.Fprintf(w, "(%d keys shown)\n", result.Count)
 	return err
 }
 
