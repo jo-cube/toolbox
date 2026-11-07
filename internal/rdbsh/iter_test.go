@@ -19,7 +19,7 @@ func newTestShell(t testing.TB) *Shell {
 		ldb, err = exec.LookPath("rocksdb_ldb")
 	}
 	if err != nil {
-		t.Skip("RocksDB integration checks require ldb or rocksdb_ldb")
+		t.Fatal("RocksDB integration checks require ldb or rocksdb_ldb in PATH")
 	}
 	path := filepath.Join(t.TempDir(), "db")
 	if output, err := exec.Command(ldb, "--db="+path, "--create_if_missing", "put", "seed", "value").CombinedOutput(); err != nil {

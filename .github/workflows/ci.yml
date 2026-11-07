@@ -8,36 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Install RocksDB headers
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y librocksdb-dev
-
-      - name: Check formatting and shell syntax
-        run: |
-          files="$(gofmt -l .)"
-          test -z "$files" || { printf 'Run gofmt on:\n%s\n' "$files"; exit 1; }
-          sh -n scripts/install.sh scripts/smoke-local.sh
-          find scripts/release-test -type f -name '*.sh' -exec sh -n {} \;
-
-      - name: Test
-        run: make test
-
-      - name: Build
-        run: make build VERSION=${GITHUB_SHA}
-
-      - name: Smoke test local binaries
-        run: TOOLBOX_BIN="$PWD/bin" sh scripts/smoke-local.sh
+    uses: ./.github/workflows/validate.yml
 
   purego-build:
     runs-on: ubuntu-latest

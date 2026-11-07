@@ -35,7 +35,8 @@ Run cheap checks first:
 
 ```sh
 gofmt -l .
-sh -n scripts/install.sh scripts/smoke-local.sh
+sh -n scripts/install.sh
+sh -n scripts/smoke-local.sh
 for f in $(find scripts/release-test -type f -name '*.sh' | sort); do sh -n "$f"; done
 go test ./internal/hello ./internal/ksetoff ./cmd/hello ./cmd/ksetoff
 go test ./internal/prob ./internal/hll ./internal/kshape ./internal/bf ./internal/card ./internal/heavy ./internal/sample ./cmd/kshape ./cmd/hll ./cmd/bf ./cmd/card ./cmd/heavy ./cmd/sample
@@ -47,8 +48,10 @@ The full suite is:
 make test
 ```
 
-`make test` requires RocksDB development headers because `rdbsh` uses CGo. The
-Makefile detects RocksDB flags with `pkg-config` or Homebrew when available.
+`make test` runs uncached and requires RocksDB development headers because
+`rdbsh` uses CGo. Its integration fixtures also require `ldb` or `rocksdb_ldb`
+in PATH; missing tools fail the tests. The Makefile detects RocksDB flags with
+`pkg-config` or Homebrew when available.
 On macOS, install them with:
 
 ```sh
@@ -59,7 +62,7 @@ On Ubuntu or Debian, install them with:
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y librocksdb-dev
+sudo apt-get install -y librocksdb-dev rocksdb-tools
 ```
 
 ## Docker Test Option
@@ -67,7 +70,7 @@ sudo apt-get install -y librocksdb-dev
 Use Docker only when a Docker runtime is available and host RocksDB headers are missing.
 This is optional; do not make Docker a hard requirement for ordinary changes.
 
-Use trusted base images. The current low-noise full-test workflow uses Docker's official Go image and installs only RocksDB headers in the container:
+Use trusted base images. The current low-noise full-test workflow uses Docker's official Go image and installs RocksDB headers and fixture tools in the container:
 
 ```sh
 docker run \
@@ -75,7 +78,7 @@ docker run \
   -v "$PWD:/work:ro" \
   -w /work \
   golang:1.26-bookworm \
-  bash -lc 'export DEBIAN_FRONTEND=noninteractive; apt-get update -qq >/dev/null && apt-get install -y -qq librocksdb-dev >/dev/null && /usr/local/go/bin/go test ./...'
+  bash -lc 'export DEBIAN_FRONTEND=noninteractive; apt-get update -qq >/dev/null && apt-get install -y -qq librocksdb-dev rocksdb-tools >/dev/null && /usr/local/go/bin/go test -count=1 ./...'
 ```
 
 Notes:

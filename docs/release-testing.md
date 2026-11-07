@@ -78,7 +78,9 @@ The test uses:
 
 It creates a two-partition topic, produces records, verifies `ksetoff -dry-run`
 does not create or move the group, then commits `latest`, numeric offset `2`,
-`beginning`, a timestamp offset, and partition-scoped `end`.
+`beginning`, epoch and future timestamp offsets, and partition-scoped `end`.
+It rejects a sub-millisecond pre-epoch timestamp and verifies that resetting an
+active classic consumer group fails without changing its committed offsets.
 
 ## Performance Smoke Test
 

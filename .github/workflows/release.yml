@@ -10,7 +10,11 @@ permissions:
   contents: write
 
 jobs:
+  validate:
+    uses: ./.github/workflows/validate.yml
+
   purego-release:
+    needs: validate
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -91,6 +95,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -119,6 +125,7 @@ jobs:
             dist/${{ matrix.cli }}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz.sha256
 
   rdbsh-release:
+    needs: validate
     strategy:
       fail-fast: false
       matrix:
@@ -136,6 +143,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - name: Set up Go
         uses: actions/setup-go@v5

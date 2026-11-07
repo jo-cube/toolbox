@@ -8,6 +8,7 @@ End-user docs live in the tool pages under `docs/`. Agent-specific workflow note
 
 - Go 1.26.4 or newer
 - RocksDB development headers and libraries when building or testing `rdbsh`
+- `ldb` or `rocksdb_ldb` in PATH for RocksDB integration fixtures
 - macOS or Linux for `scripts/install.sh`
 
 Install RocksDB headers on macOS:
@@ -16,11 +17,11 @@ Install RocksDB headers on macOS:
 brew install rocksdb
 ```
 
-Install RocksDB headers on Ubuntu or Debian:
+Install RocksDB headers and fixture tools on Ubuntu or Debian:
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y librocksdb-dev
+sudo apt-get install -y librocksdb-dev rocksdb-tools
 ```
 
 ## Repository Layout
@@ -80,7 +81,8 @@ Run cheap checks first:
 
 ```sh
 gofmt -l .
-sh -n scripts/install.sh scripts/smoke-local.sh
+sh -n scripts/install.sh
+sh -n scripts/smoke-local.sh
 for f in $(find scripts/release-test -type f -name '*.sh' | sort); do sh -n "$f"; done
 go test ./internal/hello ./internal/ksetoff ./cmd/hello ./cmd/ksetoff
 go test ./internal/prob ./internal/hll ./internal/kshape ./internal/bf ./internal/card ./internal/heavy ./internal/sample ./cmd/kshape ./cmd/hll ./cmd/bf ./cmd/card ./cmd/heavy ./cmd/sample
@@ -92,8 +94,9 @@ The full suite is:
 make test
 ```
 
-`make test` requires RocksDB development headers because `rdbsh` uses CGo and
-applies the detected RocksDB compiler and linker flags.
+`make test` runs uncached and applies the detected RocksDB compiler and linker
+flags. It requires RocksDB development headers and `ldb` or `rocksdb_ldb` in PATH;
+missing fixture tools fail the integration tests.
 
 After building, run the small local CLI smoke suite:
 
@@ -156,9 +159,9 @@ go test ./internal/rdbsh -run '^$' -bench '^BenchmarkReadCommands$' -benchmem -b
 
 The RocksDB command needs the same compiler/linker flags printed by `make test`
 when headers or libraries are outside the default search paths. Its integration
-tests and benchmarks use `ldb` or `rocksdb_ldb` from PATH to create temporary
-fixtures, and skip when neither is available. Go removes these fixtures after
-checking them. They ran with Homebrew's `rocksdb_ldb` for the measurements below.
+tests and benchmarks require `ldb` or `rocksdb_ldb` from PATH to create temporary
+fixtures. Go removes these fixtures after checking them. They ran with Homebrew's
+`rocksdb_ldb` for the measurements below.
 
 ### September 2026 Review
 
@@ -233,7 +236,13 @@ GitHub Actions:
 - build and test on pushes and pull requests
 - cross-build pure Go binaries for Linux on `amd64` and `arm64`, plus macOS `arm64`
 - build native `rdbsh` binaries for Linux on `amd64` and `arm64`, plus macOS `arm64`
+- gate release builds on the same formatting, shell syntax, full test, build, and
+  local CLI smoke checks used by CI, checking out the exact release commit
 - publish tarball release assets and matching SHA256 checksum files when a `v*` tag is pushed
+
+The shared validation runs on Linux with RocksDB headers and fixture tools.
+The existing platform build matrices remain separate; live Kafka and published
+asset checks below are not part of the release gate.
 
 Release assets are downloaded by `scripts/install.sh`.
 The installer verifies SHA256 checksums before extracting archives.
