@@ -27,6 +27,9 @@ func TestParseOffsetSpec(t *testing.T) {
 		{name: "latest", raw: "latest", want: OffsetSpec{Mode: OffsetModeLatest}},
 		{name: "end alias", raw: "end", want: OffsetSpec{Mode: OffsetModeLatest}},
 		{name: "timestamp", raw: "timestamp:2026-04-13T00:00:00Z", want: OffsetSpec{Mode: OffsetModeTimestamp, Timestamp: timestamp}},
+		{name: "timestamp without timezone", raw: "timestamp:2026-04-13T00:00:00", want: OffsetSpec{Mode: OffsetModeTimestamp, Timestamp: timestamp}},
+		{name: "timestamp with space", raw: "timestamp:2026-04-13 00:00:00", want: OffsetSpec{Mode: OffsetModeTimestamp, Timestamp: timestamp}},
+		{name: "timestamp date", raw: "timestamp:2026-04-13", want: OffsetSpec{Mode: OffsetModeTimestamp, Timestamp: timestamp}},
 		{name: "negative", raw: "-1", wantErr: "offset must be non-negative"},
 		{name: "invalid", raw: "tomorrow", wantErr: "invalid offset"},
 		{name: "invalid timestamp", raw: "timestamp:nope", wantErr: "invalid timestamp"},
@@ -50,6 +53,48 @@ func TestParseOffsetSpec(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("ParseOffsetSpec() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseOffsetSpecTimestampMilliseconds(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		raw        string
+		wantMillis int64
+		wantErr    bool
+	}{
+		{name: "before epoch", raw: "1969-12-31T23:59:59.999Z", wantErr: true},
+		{name: "nanosecond before epoch", raw: "1969-12-31T23:59:59.999999999Z", wantErr: true},
+		{name: "earliest year", raw: "0000-01-01", wantErr: true},
+		{name: "epoch", raw: "1970-01-01T00:00:00Z"},
+		{name: "nanosecond after epoch", raw: "1970-01-01T00:00:00.000000001Z"},
+		{name: "millisecond after epoch", raw: "1970-01-01T00:00:00.001Z", wantMillis: 1},
+		{name: "timezone at epoch", raw: "1970-01-01T05:30:00+05:30"},
+		{name: "timezone before epoch", raw: "1970-01-01T00:00:00+00:01", wantErr: true},
+		{name: "pre-epoch date at epoch", raw: "1969-12-31T23:00:00-01:00"},
+		{name: "latest year", raw: "9999-12-31T23:59:59.999999999Z", wantMillis: 253402300799999},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := ParseOffsetSpec("timestamp:" + tt.raw)
+			if tt.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "must be on or after the Unix epoch") {
+					t.Fatalf("ParseOffsetSpec() error = %v, want pre-epoch timestamp error", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Mode != OffsetModeTimestamp || got.Timestamp.UnixMilli() != tt.wantMillis {
+				t.Fatalf("ParseOffsetSpec() = %#v (%d ms), want timestamp at %d ms", got, got.Timestamp.UnixMilli(), tt.wantMillis)
 			}
 		})
 	}
