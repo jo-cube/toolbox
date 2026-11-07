@@ -177,9 +177,7 @@ func (f *Filter) Union(other *Filter) error {
 	if other.InsertedItems > math.MaxUint64-f.InsertedItems {
 		return fmt.Errorf("inserted item count overflow")
 	}
-	for i := range f.Bits {
-		f.Bits[i] |= other.Bits[i]
-	}
+	unionBits(f.Bits, other.Bits)
 	f.InsertedItems += other.InsertedItems
 	return nil
 }
@@ -289,9 +287,7 @@ func (f *Filter) UnionFrom(r io.Reader, maxBytes uint64) error {
 	}
 	offset := 0
 	if err := eachBitsetChunk(r, byteCount, func(chunk []byte) {
-		for i, b := range chunk {
-			f.Bits[offset+i] |= b
-		}
+		unionBits(f.Bits[offset:offset+len(chunk)], chunk)
 		offset += len(chunk)
 	}); err != nil {
 		return err
@@ -368,8 +364,23 @@ func eachBitsetChunk(r io.Reader, byteCount uint64, fn func([]byte)) error {
 	return nil
 }
 
+func unionBits(dst, src []byte) {
+	for len(src) >= 8 {
+		word := binary.LittleEndian.Uint64(dst) | binary.LittleEndian.Uint64(src)
+		binary.LittleEndian.PutUint64(dst, word)
+		dst, src = dst[8:], src[8:]
+	}
+	for i, b := range src {
+		dst[i] |= b
+	}
+}
+
 func countSetBits(data []byte) uint64 {
 	var count uint64
+	for len(data) >= 8 {
+		count += uint64(bits.OnesCount64(binary.LittleEndian.Uint64(data)))
+		data = data[8:]
+	}
 	for _, b := range data {
 		count += uint64(bits.OnesCount8(b))
 	}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/iotest"
 
 	"github.com/cespare/xxhash/v2"
 )
@@ -513,6 +514,67 @@ func TestStreamingOperationsRejectTruncatedBitsets(t *testing.T) {
 	}
 	if err := f.UnionFrom(bytes.NewReader(truncated), DefaultMaxBytes); err == nil {
 		t.Fatal("UnionFrom accepted a truncated bitset")
+	}
+}
+
+func TestBulkBitOperationsMatchByteReference(t *testing.T) {
+	t.Parallel()
+	for _, size := range []int{0, 1, 7, 8, 9, 31, 32, 33, 63, 64, 65} {
+		for _, offset := range []int{0, 1} {
+			a := &Filter{Bits: make([]byte, size+offset)[offset:], InsertedItems: 3}
+			b := &Filter{Bits: make([]byte, size+offset)[offset:], InsertedItems: 5}
+			want := make([]byte, size)
+			var setBits uint64
+			for i := range want {
+				a.Bits[i], b.Bits[i] = byte(i*29+17), byte(i*53+71)
+				want[i] = a.Bits[i] | b.Bits[i]
+				setBits += uint64(bits.OnesCount8(want[i]))
+			}
+			if err := a.Union(b); err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(a.Bits, want) || a.InsertedItems != 8 {
+				t.Fatalf("size %d, offset %d: union = %x, count %d; want %x, count 8", size, offset, a.Bits, a.InsertedItems, want)
+			}
+			if got := countSetBits(a.Bits); got != setBits {
+				t.Fatalf("size %d, offset %d: set bits = %d, want %d", size, offset, got, setBits)
+			}
+			if err := a.Union(a); err != nil || !bytes.Equal(a.Bits, want) || a.InsertedItems != 16 {
+				t.Fatalf("size %d, offset %d: self-union changed bits or count: %v", size, offset, err)
+			}
+		}
+	}
+}
+
+func TestBulkStreamingOperationsMatchByteReference(t *testing.T) {
+	t.Parallel()
+	for _, size := range []int{64 << 10, 64<<10 + blockBytes, 128<<10 + blockBytes} {
+		source := &Filter{ExpectedItems: 100, InsertedItems: 7, FalsePositiveRate: 0.01, Bits: make([]byte, size)}
+		dst := &Filter{ExpectedItems: 100, InsertedItems: 5, FalsePositiveRate: 0.01, Bits: make([]byte, size)}
+		want := make([]byte, size)
+		var setBits uint64
+		for i := range want {
+			source.Bits[i], dst.Bits[i] = byte(i*29+17)^byte(i>>8), byte(i*53+71)^byte(i>>13)
+			want[i] = source.Bits[i] | dst.Bits[i]
+			setBits += uint64(bits.OnesCount8(source.Bits[i]))
+		}
+		var encoded bytes.Buffer
+		if err := Write(&encoded, source); err != nil {
+			t.Fatal(err)
+		}
+		got, err := Inspect(iotest.HalfReader(bytes.NewReader(encoded.Bytes())))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := source.metadata(setBits, uint64(size)); got != want {
+			t.Fatalf("size %d: metadata = %#v, want %#v", size, got, want)
+		}
+		if err := dst.UnionFrom(iotest.HalfReader(bytes.NewReader(encoded.Bytes())), DefaultMaxBytes); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(dst.Bits, want) || dst.InsertedItems != 12 {
+			t.Fatalf("size %d: streaming union changed bits or count", size)
+		}
 	}
 }
 
