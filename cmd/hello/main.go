@@ -34,7 +34,10 @@ Options:
 			flag.Usage()
 			os.Exit(2)
 		}
-		fmt.Fprintf(os.Stdout, "hello %s\n", buildinfo.Version())
+		if _, err := fmt.Fprintf(os.Stdout, "hello %s\n", buildinfo.Version()); err != nil {
+			fmt.Fprintf(os.Stderr, "hello: %v\n", err)
+			os.Exit(1)
+		}
 		return
 	}
 

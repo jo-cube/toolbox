@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,7 +54,10 @@ Options:
 			flag.Usage()
 			os.Exit(2)
 		}
-		fmt.Fprintf(os.Stdout, "card %s\n", buildinfo.Version())
+		if _, err := fmt.Fprintf(os.Stdout, "card %s\n", buildinfo.Version()); err != nil {
+			fmt.Fprintf(os.Stderr, "card: %v\n", err)
+			os.Exit(1)
+		}
 		return
 	}
 
@@ -114,23 +118,27 @@ Options:
 		os.Exit(1)
 	}
 
-	if *jsonOut {
-		if err := json.NewEncoder(os.Stdout).Encode(profiles); err != nil {
-			fmt.Fprintf(os.Stderr, "card: %v\n", err)
-			os.Exit(1)
-		}
-		return
-	}
-
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "field\tapprox_unique\tnulls\tmissing\tempty\ttotal")
-	for _, p := range profiles {
-		fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%d\t%d\n", p.Field, p.ApproxUnique, p.Nulls, p.Missing, p.Empty, p.Total)
-	}
-	if err := w.Flush(); err != nil {
+	if err := writeProfiles(os.Stdout, profiles, *jsonOut); err != nil {
 		fmt.Fprintf(os.Stderr, "card: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func writeProfiles(out io.Writer, profiles []card.Profile, jsonOut bool) error {
+	if jsonOut {
+		return json.NewEncoder(out).Encode(profiles)
+	}
+
+	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	if _, err := fmt.Fprintln(w, "field\tapprox_unique\tnulls\tmissing\tempty\ttotal"); err != nil {
+		return err
+	}
+	for _, p := range profiles {
+		if _, err := fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%d\t%d\n", p.Field, p.ApproxUnique, p.Nulls, p.Missing, p.Empty, p.Total); err != nil {
+			return err
+		}
+	}
+	return w.Flush()
 }
 
 func isJSONSelector(arg string) bool {

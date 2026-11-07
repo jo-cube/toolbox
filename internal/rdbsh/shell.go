@@ -113,28 +113,35 @@ func (s *Shell) Run() error {
 		mode = "read-write"
 	}
 
-	fmt.Fprintf(s.out, "rdbsh connected to %s (%s, column family: %s)\n", s.config.DBPath, mode, s.selectedCF)
-	fmt.Fprintln(s.out, "Type 'help' for available commands, 'exit' to quit.")
-	fmt.Fprintln(s.out)
+	if _, err := fmt.Fprintf(s.out, "rdbsh connected to %s (%s, column family: %s)\nType 'help' for available commands, 'exit' to quit.\n\n", s.config.DBPath, mode, s.selectedCF); err != nil {
+		return err
+	}
 
 	scanner := bufio.NewScanner(s.in)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	for {
-		fmt.Fprint(s.out, "rdbsh> ")
+		if _, err := fmt.Fprint(s.out, "rdbsh> "); err != nil {
+			return err
+		}
 		if !scanner.Scan() {
-			fmt.Fprintln(s.out)
-			return scanner.Err()
+			_, writeErr := fmt.Fprintln(s.out)
+			if err := scanner.Err(); err != nil {
+				return err
+			}
+			return writeErr
 		}
 
 		exit, err := s.executeLine(scanner.Text())
 		if err != nil {
-			fmt.Fprintf(s.errOut, "error: %v\n", err)
+			if _, writeErr := fmt.Fprintf(s.errOut, "error: %v\n", err); writeErr != nil {
+				return writeErr
+			}
 			continue
 		}
 		if exit {
-			fmt.Fprintln(s.out, "Bye!")
-			return nil
+			_, err := fmt.Fprintln(s.out, "Bye!")
+			return err
 		}
 	}
 }

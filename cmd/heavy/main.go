@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"text/tabwriter"
@@ -49,7 +50,10 @@ Options:
 			flag.Usage()
 			os.Exit(2)
 		}
-		fmt.Fprintf(os.Stdout, "heavy %s\n", buildinfo.Version())
+		if _, err := fmt.Fprintf(os.Stdout, "heavy %s\n", buildinfo.Version()); err != nil {
+			fmt.Fprintf(os.Stderr, "heavy: %v\n", err)
+			os.Exit(1)
+		}
 		return
 	}
 	if *jsonOut && *tsvOut {
@@ -81,29 +85,32 @@ Options:
 		os.Exit(1)
 	}
 
-	if *jsonOut {
-		if err := json.NewEncoder(os.Stdout).Encode(results); err != nil {
-			fmt.Fprintf(os.Stderr, "heavy: %v\n", err)
-			os.Exit(1)
-		}
-		return
-	}
-
-	if *tsvOut {
-		fmt.Fprintln(os.Stdout, "rank\tcount_estimate\tcount_lower_bound\titem")
-		for _, result := range results {
-			fmt.Fprintf(os.Stdout, "%d\t%d\t%d\t%s\n", result.Rank, result.CountEstimate, result.CountLowerBound, result.Item)
-		}
-		return
-	}
-
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "rank\tcount_estimate\tcount_lower_bound\titem")
-	for _, result := range results {
-		fmt.Fprintf(w, "%d\t%d\t%d\t%s\n", result.Rank, result.CountEstimate, result.CountLowerBound, result.Item)
-	}
-	if err := w.Flush(); err != nil {
+	if err := writeResults(os.Stdout, results, *jsonOut, *tsvOut); err != nil {
 		fmt.Fprintf(os.Stderr, "heavy: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func writeResults(out io.Writer, results []heavy.Result, jsonOut, tsvOut bool) error {
+	if jsonOut {
+		return json.NewEncoder(out).Encode(results)
+	}
+
+	var table *tabwriter.Writer
+	if !tsvOut {
+		table = tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+		out = table
+	}
+	if _, err := fmt.Fprintln(out, "rank\tcount_estimate\tcount_lower_bound\titem"); err != nil {
+		return err
+	}
+	for _, result := range results {
+		if _, err := fmt.Fprintf(out, "%d\t%d\t%d\t%s\n", result.Rank, result.CountEstimate, result.CountLowerBound, result.Item); err != nil {
+			return err
+		}
+	}
+	if table != nil {
+		return table.Flush()
+	}
+	return nil
 }

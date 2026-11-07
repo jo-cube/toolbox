@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/jo-cube/toolbox/internal/hll"
@@ -60,6 +63,25 @@ func TestCountPropagatesOutputFailure(t *testing.T) {
 	sentinel := errors.New("output failed")
 	if err := count(nil, strings.NewReader("a\n"), failingWriter{sentinel}); !errors.Is(err, sentinel) {
 		t.Fatalf("error = %v, want %v", err, sentinel)
+	}
+}
+
+func TestInspectPropagatesOutputFailure(t *testing.T) {
+	t.Parallel()
+	var artifact bytes.Buffer
+	if err := build(nil, strings.NewReader("a\n"), &artifact); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "values.hll")
+	if err := os.WriteFile(path, artifact.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{path}, {"--json", path}} {
+		for _, failure := range []error{errors.New("output failed"), syscall.EPIPE} {
+			if err := inspect(args, failingWriter{failure}); !errors.Is(err, failure) {
+				t.Fatalf("args=%v: error = %v, want %v", args, err, failure)
+			}
+		}
 	}
 }
 

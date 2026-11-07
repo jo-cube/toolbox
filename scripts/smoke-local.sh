@@ -27,6 +27,7 @@ for tool in hello ksetoff kshape rdbsh hll bf card heavy sample; do
 	expect_status 2 "$bin/$tool" --version extra
 	expect_status 2 "$bin/$tool" --version --version
 	expect_status 2 "$bin/$tool" --version=true
+	expect_status 1 sh -c 'exec "$@" </dev/null 1<&0' sh "$bin/$tool" --version
 done
 
 [ "$("$bin/hello")" = "Hello, world!" ]
@@ -48,5 +49,8 @@ expect_status 2 "$bin/hll" count --field 2
 expect_status 2 "$bin/hll" build --delimiter ::
 expect_status 2 "$bin/heavy" --field 2
 expect_status 2 "$bin/sample" --count 1 --invert
+
+expect_status 1 sh -c 'printf "a\n" | "$1" --tsv 1<&0' sh "$bin/heavy"
+expect_status 1 sh -c 'printf "a\n" | "$1" build | "$1" inspect - 1<&0' sh "$bin/hll"
 
 printf 'LOCAL CLI SMOKE TEST PASSED\n'

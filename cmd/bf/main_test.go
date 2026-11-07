@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -115,6 +116,24 @@ func TestInspectReadsFilterFromStdin(t *testing.T) {
 		t.Fatalf("metadata = %#v", metadata)
 	}
 }
+
+func TestInspectPropagatesOutputFailure(t *testing.T) {
+	t.Parallel()
+	var artifact bytes.Buffer
+	if err := internalbf.Write(&artifact, newFilter(t, "alpha")); err != nil {
+		t.Fatal(err)
+	}
+	failure := errors.New("output failed")
+	for _, args := range [][]string{{"-"}, {"--json", "-"}} {
+		if err := inspect(args, bytes.NewReader(artifact.Bytes()), failingWriter{failure}); !errors.Is(err, failure) {
+			t.Fatalf("args=%v: error = %v, want %v", args, err, failure)
+		}
+	}
+}
+
+type failingWriter struct{ err error }
+
+func (w failingWriter) Write([]byte) (int, error) { return 0, w.err }
 
 func TestUnionReadsOneFilterFromStdin(t *testing.T) {
 	t.Parallel()

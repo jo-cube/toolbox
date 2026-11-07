@@ -99,6 +99,56 @@ func TestReadCommandsPreserveOutput(t *testing.T) {
 	}
 }
 
+func TestCommandsPropagateOutputFailures(t *testing.T) {
+	s := newTestShell(t)
+	for key, value := range map[string][]byte{"alpha": []byte("one"), "alpine": {}, "binary": {0, 10}} {
+		if err := s.put([]byte(key), value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	failure := errors.New("output failed")
+	for _, tt := range []struct{ command, prefix string }{
+		{"get alpha", ""},
+		{"get missing", ""},
+		{"get binary", "0x000a\n"},
+		{"put written value", ""},
+		{"delete written", ""},
+		{"scan z", ""},
+		{"scan al 1", "alpha  one\n"},
+		{"keys z", ""},
+		{"keys al 1", "alpha\n"},
+		{"keys al 2", "alpha\nalpine\n"},
+		{"count", ""},
+		{"count al", ""},
+		{"stats", "RocksDB properties (column family: default)\n"},
+		{"cfs", ""},
+		{"help", "Available commands:\n\n"},
+		{"export - csv", ""},
+		{"export - json", ""},
+	} {
+		t.Run(tt.command, func(t *testing.T) {
+			s.out = &limitedWriter{remaining: len(tt.prefix), err: failure}
+			if err := s.Exec(tt.command); !errors.Is(err, failure) {
+				t.Fatalf("error = %v, want %v", err, failure)
+			}
+		})
+	}
+}
+
+type limitedWriter struct {
+	remaining int
+	err       error
+}
+
+func (w *limitedWriter) Write(p []byte) (int, error) {
+	n := min(len(p), w.remaining)
+	w.remaining -= n
+	if n < len(p) {
+		return n, w.err
+	}
+	return n, nil
+}
+
 type failedExportWriter struct{ err error }
 
 func (w failedExportWriter) Write([]byte) (int, error) { return 0, w.err }

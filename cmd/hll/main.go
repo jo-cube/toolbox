@@ -15,7 +15,10 @@ import (
 
 func main() {
 	if len(os.Args) == 2 && (os.Args[1] == "--version" || os.Args[1] == "-V") {
-		fmt.Fprintf(os.Stdout, "hll %s\n", buildinfo.Version())
+		if _, err := fmt.Fprintf(os.Stdout, "hll %s\n", buildinfo.Version()); err != nil {
+			fmt.Fprintf(os.Stderr, "hll: %v\n", err)
+			os.Exit(1)
+		}
 		return
 	}
 	if len(os.Args) < 2 || os.Args[1] == "-h" || os.Args[1] == "--help" {
@@ -37,7 +40,7 @@ func main() {
 	case "merge":
 		err = merge(os.Args[2:])
 	case "inspect":
-		err = inspect(os.Args[2:])
+		err = inspect(os.Args[2:], os.Stdout)
 	default:
 		usage()
 		os.Exit(2)
@@ -221,7 +224,7 @@ Sketches must use compatible precision, register count, version, and hash metada
 	return hll.Write(os.Stdout, merged)
 }
 
-func inspect(args []string) error {
+func inspect(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("hll inspect", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "write JSON output")
 	fs.Usage = func() {
@@ -246,16 +249,11 @@ Options:
 	}
 	m := s.Metadata()
 	if *jsonOut {
-		return json.NewEncoder(os.Stdout).Encode(m)
+		return json.NewEncoder(out).Encode(m)
 	}
-	fmt.Fprintf(os.Stdout, "type=%s\n", m.Type)
-	fmt.Fprintf(os.Stdout, "version=%d\n", m.Version)
-	fmt.Fprintf(os.Stdout, "precision=%d\n", m.Precision)
-	fmt.Fprintf(os.Stdout, "registers=%d\n", m.Registers)
-	fmt.Fprintf(os.Stdout, "hash=%s\n", m.Hash)
-	fmt.Fprintf(os.Stdout, "approx_unique=%d\n", m.ApproxUnique)
-	fmt.Fprintf(os.Stdout, "relative_error=%.2f%%\n", m.RelativeError*100)
-	return nil
+	_, err = fmt.Fprintf(out, "type=%s\nversion=%d\nprecision=%d\nregisters=%d\nhash=%s\napprox_unique=%d\nrelative_error=%.2f%%\n",
+		m.Type, m.Version, m.Precision, m.Registers, m.Hash, m.ApproxUnique, m.RelativeError*100)
+	return err
 }
 
 func readSketch(path string) (*hll.Sketch, error) {
