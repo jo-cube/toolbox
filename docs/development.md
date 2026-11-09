@@ -244,6 +244,11 @@ The shared validation runs on Linux with RocksDB headers and fixture tools.
 The existing platform build matrices remain separate; live Kafka and published
 asset checks below are not part of the release gate.
 
+Linux jobs use `ubuntu-26.04` and `ubuntu-26.04-arm`; release tests use
+`ubuntu:26.04` to match the native RocksDB runtime. macOS native builds use
+`macos-latest`. Actions track their current stable major versions; the Go
+toolchain version comes from `go.mod`.
+
 Release assets are downloaded by `scripts/install.sh`.
 The installer verifies SHA256 checksums before extracting archives.
 It also runs the extracted `rdbsh --version` before installation so missing or incompatible RocksDB runtime libraries fail with setup guidance.
