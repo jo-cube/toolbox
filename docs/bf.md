@@ -51,10 +51,10 @@ cat known-users.txt | bf build --expected-items 1000000 --false-positive-rate 0.
 
 Required sizing flags:
 
-- `--expected-items`: expected number of inserted items
+- `--expected-items`: expected distinct-item capacity
 - `--false-positive-rate`: target false-positive rate, greater than `0` and less than `1`
 
-These flags are required because Bloom filter size and hash count depend on them. The tool does not guess production sizing.
+These flags determine the bitset size. Every filter uses eight probes.
 
 If the input contains more than `--expected-items` values, `bf build` writes a warning to stderr after consuming the stream. The binary filter remains the only stdout output.
 
@@ -182,7 +182,9 @@ Bloom filters trade memory for false-positive probability.
 
 The filter consists of 256-bit blocks with eight 32-bit lanes. One 64-bit hash selects a block and one bit in each lane, so a lookup reads only one small region of the bitset. Sizing uses the split-block false-positive model and rounds the bitset to a whole 32-byte block.
 
-If you insert more than `--expected-items`, the actual false-positive rate increases. `inspect` reports the set-bit count, fill ratio, and an estimated current false-positive rate derived from the inserted-item count and bitset size. If you need a lower false-positive rate, rebuild the filter with a lower `--false-positive-rate` value or a higher expected item count.
+Sizing assumes distinct values with independent, uniformly distributed hashes. New filters reject targets below a conservative hash-collision lower bound for the requested capacity and rounded size. This necessary check does not guarantee the target rate for every input; existing version 2 filters remain readable.
+
+Exceeding the distinct-item capacity can increase false positives. `inspect` derives its current-rate estimate from the insertion count and bitset size, assuming distinct values and independent lane coverage. Repeated values and overlapping unions inflate that count; lane correlations can make very small estimates optimistic. The estimate is not a measured rate or a guaranteed upper bound.
 
 `bf` limits a filter bitset to 2 GiB by default. Sizing requests and state files outside the format and platform limits fail before allocation.
 

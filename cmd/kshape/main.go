@@ -25,7 +25,10 @@ func main() {
 
 func run(args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) == 1 && (args[0] == "--version" || args[0] == "-V") {
-		fmt.Fprintf(out, "kshape %s\n", buildinfo.Version())
+		if _, err := fmt.Fprintf(out, "kshape %s\n", buildinfo.Version()); err != nil {
+			fmt.Fprintf(errOut, "kshape: %v\n", err)
+			return 1
+		}
 		return 0
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {

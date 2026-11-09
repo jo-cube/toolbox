@@ -4,7 +4,7 @@ set -eu
 
 script_dir="$(CDPATH= cd "$(dirname "$0")" && pwd)"
 version="${VERSION:?set VERSION to the release tag, for example v0.3.0}"
-image="${IMAGE:-ubuntu:24.04}"
+image="${IMAGE:-ubuntu:26.04}"
 name="${NAME:-toolbox-release-perf}"
 
 docker run --rm \

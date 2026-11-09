@@ -1,6 +1,7 @@
 package rdbsh
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"strconv"
@@ -68,13 +69,16 @@ func (s *Shell) cmdGet(args []string) error {
 		return err
 	}
 	if !found {
-		fmt.Fprintln(s.out, "(not found)")
-		return nil
+		_, err := fmt.Fprintln(s.out, "(not found)")
+		return err
 	}
 
-	fmt.Fprintln(s.out, formatBytes(value))
+	if _, err := fmt.Fprintln(s.out, formatBytes(value)); err != nil {
+		return err
+	}
 	if !isPrintable(value) {
-		fmt.Fprintf(s.out, "(%d bytes)\n", len(value))
+		_, err := fmt.Fprintf(s.out, "(%d bytes)\n", len(value))
+		return err
 	}
 	return nil
 }
@@ -100,8 +104,8 @@ func (s *Shell) cmdPut(args []string) error {
 		return err
 	}
 
-	fmt.Fprintln(s.out, "OK")
-	return nil
+	_, err = fmt.Fprintln(s.out, "OK")
+	return err
 }
 
 func (s *Shell) cmdDelete(args []string) error {
@@ -120,8 +124,8 @@ func (s *Shell) cmdDelete(args []string) error {
 		return err
 	}
 
-	fmt.Fprintln(s.out, "OK")
-	return nil
+	_, err = fmt.Fprintln(s.out, "OK")
+	return err
 }
 
 func (s *Shell) cmdScan(args []string) error {
@@ -139,40 +143,52 @@ func (s *Shell) cmdScan(args []string) error {
 		return err
 	}
 	if result.Count == 0 {
-		fmt.Fprintln(s.out, "(no results)")
-		return nil
+		_, err := fmt.Fprintln(s.out, "(no results)")
+		return err
 	}
 	if err := w.Flush(); err != nil {
 		return err
 	}
 	if result.Limited {
-		fmt.Fprintf(s.out, "... (limit %d reached)\n", limit)
+		_, err := fmt.Fprintf(s.out, "... (limit %d reached)\n", limit)
+		return err
 	}
 	return nil
 }
 
-func (s *Shell) cmdKeys(args []string) error {
+func (s *Shell) cmdKeys(args []string) (err error) {
 	prefix, limit, err := parsePrefixAndLimit(args, "usage: keys [prefix] [limit]")
 	if err != nil {
 		return err
 	}
 
+	w := bufio.NewWriter(s.out)
+	defer func() {
+		if flushErr := w.Flush(); err == nil {
+			err = flushErr
+		}
+	}()
+
 	result, err := s.iterate(prefix, limit, false, func(key, _ []byte) error {
-		_, err := fmt.Fprintln(s.out, formatBytes(key))
-		return err
+		if _, err := w.WriteString(formatBytes(key)); err != nil {
+			return err
+		}
+		return w.WriteByte('\n')
 	})
 	if err != nil {
 		return err
 	}
 	if result.Count == 0 {
-		fmt.Fprintln(s.out, "(no keys found)")
-		return nil
+		_, err := fmt.Fprintln(w, "(no keys found)")
+		return err
 	}
 	if result.Limited {
-		fmt.Fprintf(s.out, "... (limit %d reached)\n", limit)
+		if _, err := fmt.Fprintf(w, "... (limit %d reached)\n", limit); err != nil {
+			return err
+		}
 	}
-	fmt.Fprintf(s.out, "(%d keys shown)\n", result.Count)
-	return nil
+	_, err = fmt.Fprintf(w, "(%d keys shown)\n", result.Count)
+	return err
 }
 
 func (s *Shell) cmdCount(args []string) error {
@@ -195,11 +211,11 @@ func (s *Shell) cmdCount(args []string) error {
 	}
 
 	if len(args) == 1 {
-		fmt.Fprintf(s.out, "%d keys (prefix: %s)\n", result.Count, formatBytes(prefix))
+		_, err = fmt.Fprintf(s.out, "%d keys (prefix: %s)\n", result.Count, formatBytes(prefix))
 	} else {
-		fmt.Fprintf(s.out, "%d keys total\n", result.Count)
+		_, err = fmt.Fprintf(s.out, "%d keys total\n", result.Count)
 	}
-	return nil
+	return err
 }
 
 func (s *Shell) cmdStats(args []string) error {
@@ -223,7 +239,9 @@ func (s *Shell) cmdStats(args []string) error {
 		"rocksdb.cur-size-all-mem-tables",
 	}
 
-	fmt.Fprintf(s.out, "RocksDB properties (column family: %s)\n", s.selectedCF)
+	if _, err := fmt.Fprintf(s.out, "RocksDB properties (column family: %s)\n", s.selectedCF); err != nil {
+		return err
+	}
 	w := tabwriter.NewWriter(s.out, 0, 0, 2, ' ', 0)
 	for _, property := range properties {
 		value := s.property(property)
@@ -234,7 +252,9 @@ func (s *Shell) cmdStats(args []string) error {
 			if err := w.Flush(); err != nil {
 				return err
 			}
-			fmt.Fprintf(s.out, "\n[%s]\n%s\n", property, value)
+			if _, err := fmt.Fprintf(s.out, "\n[%s]\n%s\n", property, value); err != nil {
+				return err
+			}
 			continue
 		}
 		if _, err := fmt.Fprintf(w, "%s\t%s\n", property, value); err != nil {
@@ -253,8 +273,8 @@ func (s *Shell) cmdCFS(args []string) error {
 	}
 
 	if len(s.availableCFs) == 0 {
-		fmt.Fprintln(s.out, "(no column families found)")
-		return nil
+		_, err := fmt.Fprintln(s.out, "(no column families found)")
+		return err
 	}
 
 	for _, name := range s.availableCFs {
@@ -262,7 +282,9 @@ func (s *Shell) cmdCFS(args []string) error {
 		if name == s.selectedCF {
 			marker = "*"
 		}
-		fmt.Fprintf(s.out, "%s %s\n", marker, name)
+		if _, err := fmt.Fprintf(s.out, "%s %s\n", marker, name); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -272,20 +294,19 @@ func (s *Shell) cmdHelp(args []string) error {
 		return fmt.Errorf("usage: help")
 	}
 
-	fmt.Fprintln(s.out, "Available commands:")
-	fmt.Fprintln(s.out)
+	if _, err := fmt.Fprint(s.out, "Available commands:\n\n"); err != nil {
+		return err
+	}
 
 	order := []string{"get", "put", "delete", "scan", "keys", "count", "stats", "export", "cfs", "help"}
 	for _, name := range order {
-		fmt.Fprintf(s.out, "  %s\n", s.commands[name].help)
+		if _, err := fmt.Fprintf(s.out, "  %s\n", s.commands[name].help); err != nil {
+			return err
+		}
 	}
 
-	fmt.Fprintln(s.out)
-	fmt.Fprintln(s.out, "Input rules:")
-	fmt.Fprintln(s.out, "  - Prefix keys, values, or prefixes with 0x for raw hex bytes")
-	fmt.Fprintln(s.out, "  - Use double quotes for spaces inside arguments")
-	fmt.Fprintln(s.out, "  - Use \\ to escape spaces or quotes")
-	return nil
+	_, err := fmt.Fprint(s.out, "\nInput rules:\n  - Prefix keys, values, or prefixes with 0x for raw hex bytes\n  - Use double quotes for spaces inside arguments\n  - Use \\ to escape spaces or quotes\n")
+	return err
 }
 
 func parsePrefixAndLimit(args []string, usage string) ([]byte, int, error) {

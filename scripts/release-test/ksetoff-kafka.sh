@@ -3,15 +3,17 @@
 set -eu
 
 script_dir="$(CDPATH= cd "$(dirname "$0")" && pwd)"
+. "$script_dir/lib.sh"
 version="${VERSION:?set VERSION to the release tag, for example v0.3.0}"
 kafka_image="${KAFKA_IMAGE:-apache/kafka:4.3.1}"
-ubuntu_image="${IMAGE:-ubuntu:24.04}"
+ubuntu_image="${IMAGE:-ubuntu:26.04}"
 net="${NET:-toolbox-ksetoff-test-net}"
 vol="${VOL:-toolbox-ksetoff-test-tools}"
 broker="${BROKER:-toolbox-ksetoff-test-broker}"
 topic="${TOPIC:-toolbox-ksetoff-release}"
 group="${GROUP:-toolbox-ksetoff-group}"
 subset_group="${SUBSET_GROUP:-toolbox-ksetoff-subset-group}"
+active_group="${ACTIVE_GROUP:-toolbox-ksetoff-active-group}"
 
 cleanup() {
 	docker rm -f "$broker" >/dev/null 2>&1 || true
@@ -59,6 +61,11 @@ sh /release-test/install-tool.sh ksetoff
 '
 
 docker exec "$broker" sh -lc 'printf "bootstrap.servers=localhost:9092\n" > /tmp/kafka.conf'
+
+expect_status 2 "ksetoff rejects sub-millisecond pre-epoch timestamp" \
+	docker exec "$broker" /tools/ksetoff \
+	-F /tmp/kafka.conf -group "$group" -topic "$topic" \
+	-offset "timestamp:1969-12-31T23:59:59.999999999Z" -dry-run
 
 docker exec "$broker" /opt/kafka/bin/kafka-topics.sh \
 	--bootstrap-server localhost:9092 \
@@ -143,6 +150,19 @@ grep -Eq "${topic}[[:space:]]+1[[:space:]]+0[[:space:]]+[0-9]+" /tmp/ksetoff-tim
 
 docker exec "$broker" /tools/ksetoff \
 	-F /tmp/kafka.conf \
+	-group "$group" \
+	-topic "$topic" \
+	-offset "timestamp:9999-12-31T23:59:59Z" >/dev/null
+
+docker exec "$broker" /opt/kafka/bin/kafka-consumer-groups.sh \
+	--bootstrap-server localhost:9092 \
+	--describe \
+	--group "$group" > /tmp/ksetoff-future-timestamp-group.out
+grep -Eq "${topic}[[:space:]]+0[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+0" /tmp/ksetoff-future-timestamp-group.out
+grep -Eq "${topic}[[:space:]]+1[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+0" /tmp/ksetoff-future-timestamp-group.out
+
+docker exec "$broker" /tools/ksetoff \
+	-F /tmp/kafka.conf \
 	-group "$subset_group" \
 	-topic "$topic" \
 	-offset end \
@@ -157,5 +177,43 @@ if grep -Eq "${topic}[[:space:]]+0[[:space:]]+" /tmp/ksetoff-subset-group.out; t
 	printf 'FAIL ksetoff partition subset moved partition 0\n' >&2
 	exit 1
 fi
+
+docker exec "$broker" /tools/ksetoff \
+	-F /tmp/kafka.conf -group "$active_group" -topic "$topic" -offset earliest >/dev/null
+docker exec -d "$broker" /opt/kafka/bin/kafka-console-consumer.sh \
+	--bootstrap-server localhost:9092 \
+	--topic "$topic" \
+	--group "$active_group" \
+	--consumer-property group.protocol=classic \
+	--consumer-property enable.auto.commit=false
+
+for i in $(seq 1 30); do
+	if docker exec "$broker" /opt/kafka/bin/kafka-consumer-groups.sh \
+		--bootstrap-server localhost:9092 --describe --group "$active_group" --state 2>/dev/null \
+		| grep -Eq '[[:space:]]Stable[[:space:]]'; then
+		break
+	fi
+	if [ "$i" -eq 30 ]; then
+		fail "ksetoff active consumer group did not become stable"
+	fi
+	sleep 1
+done
+
+status=0
+active_output="$(docker exec "$broker" /tools/ksetoff \
+	-F /tmp/kafka.conf -group "$active_group" -topic "$topic" -offset latest 2>&1)" || status=$?
+if [ "$status" -ne 1 ]; then
+	printf '%s\n' "$active_output" >&2
+	fail "ksetoff active group: got status $status, want 1"
+fi
+printf '%s\n' "$active_output" | grep -q 'has active members' || {
+	printf '%s\n' "$active_output" >&2
+	fail "ksetoff active group diagnostic"
+}
+
+docker exec "$broker" /opt/kafka/bin/kafka-consumer-groups.sh \
+	--bootstrap-server localhost:9092 --describe --group "$active_group" > /tmp/ksetoff-active-group.out
+grep -Eq "${topic}[[:space:]]+0[[:space:]]+0[[:space:]]+[0-9]+" /tmp/ksetoff-active-group.out
+grep -Eq "${topic}[[:space:]]+1[[:space:]]+0[[:space:]]+[0-9]+" /tmp/ksetoff-active-group.out
 
 printf 'KSETOFF KAFKA RELEASE TEST PASSED\n'

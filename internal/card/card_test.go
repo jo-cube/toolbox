@@ -2,12 +2,16 @@ package card
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+	"testing/iotest"
 )
 
 const csvUsers = `user_id,country
@@ -182,6 +186,85 @@ func TestDelimitedSelectionMatchesSplit(t *testing.T) {
 		}
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("delimiter %q: got %#v, want %#v", delimiter, got, want)
+		}
+	}
+}
+
+func TestDelimitedLineEndings(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		input  string
+		values []string
+	}{
+		{"", nil},
+		{"\r", nil},
+		{"\n", []string{""}},
+		{"\r\n", []string{""}},
+		{"\r\r", []string{"\r"}},
+		{"a\r\n\nb\r", []string{"a", "", "b"}},
+		{"a\r\r\na\r", []string{"a\r", "a"}},
+	} {
+		t.Run(fmt.Sprintf("%q", tt.input), func(t *testing.T) {
+			cfg := Config{Mode: "delimiter", Delimiter: "\t", Columns: []string{"1"}, Precision: 8}
+			got, err := RunFrom(nil, cfg, iotest.DataErrReader(strings.NewReader(tt.input)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			counters, err := newCounters(cfg.Columns, cfg.Precision)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, value := range tt.values {
+				addValue(counters[0], value, true)
+			}
+			want, err := finish(counters, nil)
+			if err != nil || !reflect.DeepEqual(got, want) {
+				t.Fatalf("profiles = %#v, want %#v (error %v)", got, want, err)
+			}
+		})
+	}
+}
+
+func TestDelimitedConsumesFieldsBeforeBufferReuse(t *testing.T) {
+	t.Parallel()
+	cfg := Config{Mode: "delimiter", Delimiter: "::", Columns: []string{"3", "1", "2", "4", "3"}, Precision: 8}
+	counters, err := newCounters(cfg.Columns, cfg.Precision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var input strings.Builder
+	for i := range 100 {
+		size := []int{7, 4095, 64<<10 + 1}[i%3]
+		if i == 50 {
+			size = 1<<20 + 1
+		}
+		fields := []string{strings.Repeat("x", size), "", fmt.Sprintf("\"%d\"\x00\xff", i)}
+		input.WriteString(strings.Join(fields, cfg.Delimiter))
+		input.WriteString("\r\n")
+		for j, column := range cfg.Columns {
+			index, _ := strconv.Atoi(column)
+			value, ok := recordValue(fields, index-1)
+			addValue(counters[j], value, ok)
+		}
+	}
+	got, err := RunFrom(nil, cfg, iotest.HalfReader(strings.NewReader(input.String())))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := finish(counters, nil)
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("profiles = %#v, want %#v (error %v)", got, want, err)
+	}
+}
+
+func TestDelimitedPreservesReadErrors(t *testing.T) {
+	t.Parallel()
+	failure := errors.New("input failed")
+	for _, input := range []string{"", "a,b\n", "a,b", strings.Repeat("x", 64<<10)} {
+		_, err := RunFrom(nil, Config{Mode: "delimiter", Delimiter: ",", Columns: []string{"1"}},
+			io.MultiReader(strings.NewReader(input), iotest.ErrReader(failure)))
+		if !errors.Is(err, failure) || err.Error() != "<stdin>: input failed" {
+			t.Fatalf("input length %d: error = %v, want wrapped input failure", len(input), err)
 		}
 	}
 }

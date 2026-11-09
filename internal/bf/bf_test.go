@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math"
+	"math/big"
 	"math/bits"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/iotest"
 
 	"github.com/cespare/xxhash/v2"
 )
@@ -291,18 +293,97 @@ func TestSizingAcrossScales(t *testing.T) {
 	for _, tt := range []struct {
 		expected uint64
 		rate     float64
+		bytes    int
 	}{
-		{expected: 100, rate: 0.1},
-		{expected: 10_000, rate: 0.01},
-		{expected: 1_000_000, rate: 0.001},
+		{expected: 100, rate: 0.1, bytes: 96},
+		{expected: 10_000, rate: 0.01, bytes: 13184},
+		{expected: 1_000_000, rate: 0.001, bytes: 2111232},
+		{expected: 100, rate: 0.000001, bytes: 832},
 	} {
 		f, err := New(tt.expected, tt.rate)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(f.Bits) == 0 || len(f.Bits)%blockBytes != 0 {
-			t.Fatalf("New(%d, %g) returned invalid sizing: %#v", tt.expected, tt.rate, f)
+		if len(f.Bits) != tt.bytes {
+			t.Fatalf("New(%d, %g) allocated %d bytes, want %d", tt.expected, tt.rate, len(f.Bits), tt.bytes)
 		}
+	}
+}
+
+func TestSizingCollisionLimit(t *testing.T) {
+	t.Parallel()
+	boundary := math.Ldexp(float64((uint64(1)<<32)/3), -64)
+	for _, tt := range []struct {
+		name     string
+		expected uint64
+		rate     float64
+		wantErr  bool
+	}{
+		{name: "one item", expected: 1, rate: 1e-12, wantErr: true},
+		{name: "large capacity", expected: 1_000_000, rate: 1e-12, wantErr: true},
+		{name: "smaller target", expected: 1, rate: 1e-15, wantErr: true},
+		{name: "rounded allocation", expected: 1, rate: 8e-11},
+		{name: "boundary", expected: 1, rate: boundary},
+		{name: "below boundary", expected: 1, rate: math.Nextafter(boundary, 0), wantErr: true},
+		{name: "above boundary", expected: 1, rate: math.Nextafter(boundary, math.Inf(1))},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, limit := range []uint64{DefaultMaxBytes, 0} {
+				size, err := sizing(tt.expected, tt.rate, limit)
+				if tt.wantErr {
+					if err == nil || !strings.Contains(err.Error(), "collision lower bound") {
+						t.Fatalf("sizing() = %d, %v, want collision error", size, err)
+					}
+				} else if err != nil || size != 96 {
+					t.Fatalf("sizing() = %d, %v, want 96, nil", size, err)
+				}
+			}
+		})
+	}
+}
+
+func TestCollisionLowerBoundRoundsConservatively(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct{ expected, blocks uint64 }{
+		{1, 1}, {1, 3}, {2, 5}, {1_000_000, 13_073_859},
+		{1 << 40, maxBlockCount}, {1 << 53, maxBlockCount},
+	} {
+		p := new(big.Rat).SetFrac(new(big.Int).SetUint64((uint64(1)<<32)/tt.blocks), new(big.Int).Lsh(big.NewInt(1), 64))
+		numerator := new(big.Rat).Mul(new(big.Rat).SetUint64(tt.expected), p)
+		denominator := new(big.Rat).Mul(new(big.Rat).SetUint64(tt.expected-1), p)
+		denominator.Add(denominator, big.NewRat(1, 1))
+		exact := new(big.Rat).Quo(numerator, denominator)
+		got := collisionLowerBound(tt.expected, tt.blocks)
+		if got <= 0 || new(big.Rat).SetFloat64(got).Cmp(exact) > 0 {
+			t.Fatalf("n=%d blocks=%d: %g exceeds exact bound %s", tt.expected, tt.blocks, got, exact)
+		}
+		minimum, _ := exact.Float64()
+		for range 8 {
+			minimum = math.Nextafter(minimum, 0)
+		}
+		if got < minimum {
+			t.Fatalf("n=%d blocks=%d: %g is unnecessarily below %g", tt.expected, tt.blocks, got, minimum)
+		}
+	}
+}
+
+func TestReadAcceptsLegacySizingBelowCollisionLimit(t *testing.T) {
+	t.Parallel()
+	legacy := &Filter{ExpectedItems: 1, FalsePositiveRate: 1e-12, Bits: make([]byte, 14*blockBytes)}
+	legacy.Add([]byte("alpha"))
+	var serialized bytes.Buffer
+	if err := Write(&serialized, legacy); err != nil {
+		t.Fatal(err)
+	}
+	if serialized.Bytes()[4] != 2 {
+		t.Fatal("serialized format is no longer v2")
+	}
+	got, err := Read(&serialized)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Test([]byte("alpha")) || got.FalsePositiveRate != legacy.FalsePositiveRate {
+		t.Fatal("legacy filter changed after reading")
 	}
 }
 
@@ -340,6 +421,14 @@ func TestNewRejectsUnsafeSizing(t *testing.T) {
 	}
 	if _, err := New(1, 1e-100); err == nil {
 		t.Fatal("New() accepted sizing beyond the allocation limit")
+	}
+	for _, tt := range []struct {
+		expected uint64
+		rate     float64
+	}{{math.MaxUint64, 0.01}, {1, math.SmallestNonzeroFloat64}} {
+		if _, err := sizing(tt.expected, tt.rate, 0); err == nil || !strings.Contains(err.Error(), "filter format") {
+			t.Fatalf("unlimited sizing(%d, %g) error = %v, want format limit", tt.expected, tt.rate, err)
+		}
 	}
 }
 
@@ -425,6 +514,67 @@ func TestStreamingOperationsRejectTruncatedBitsets(t *testing.T) {
 	}
 	if err := f.UnionFrom(bytes.NewReader(truncated), DefaultMaxBytes); err == nil {
 		t.Fatal("UnionFrom accepted a truncated bitset")
+	}
+}
+
+func TestBulkBitOperationsMatchByteReference(t *testing.T) {
+	t.Parallel()
+	for _, size := range []int{0, 1, 7, 8, 9, 31, 32, 33, 63, 64, 65} {
+		for _, offset := range []int{0, 1} {
+			a := &Filter{Bits: make([]byte, size+offset)[offset:], InsertedItems: 3}
+			b := &Filter{Bits: make([]byte, size+offset)[offset:], InsertedItems: 5}
+			want := make([]byte, size)
+			var setBits uint64
+			for i := range want {
+				a.Bits[i], b.Bits[i] = byte(i*29+17), byte(i*53+71)
+				want[i] = a.Bits[i] | b.Bits[i]
+				setBits += uint64(bits.OnesCount8(want[i]))
+			}
+			if err := a.Union(b); err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(a.Bits, want) || a.InsertedItems != 8 {
+				t.Fatalf("size %d, offset %d: union = %x, count %d; want %x, count 8", size, offset, a.Bits, a.InsertedItems, want)
+			}
+			if got := countSetBits(a.Bits); got != setBits {
+				t.Fatalf("size %d, offset %d: set bits = %d, want %d", size, offset, got, setBits)
+			}
+			if err := a.Union(a); err != nil || !bytes.Equal(a.Bits, want) || a.InsertedItems != 16 {
+				t.Fatalf("size %d, offset %d: self-union changed bits or count: %v", size, offset, err)
+			}
+		}
+	}
+}
+
+func TestBulkStreamingOperationsMatchByteReference(t *testing.T) {
+	t.Parallel()
+	for _, size := range []int{64 << 10, 64<<10 + blockBytes, 128<<10 + blockBytes} {
+		source := &Filter{ExpectedItems: 100, InsertedItems: 7, FalsePositiveRate: 0.01, Bits: make([]byte, size)}
+		dst := &Filter{ExpectedItems: 100, InsertedItems: 5, FalsePositiveRate: 0.01, Bits: make([]byte, size)}
+		want := make([]byte, size)
+		var setBits uint64
+		for i := range want {
+			source.Bits[i], dst.Bits[i] = byte(i*29+17)^byte(i>>8), byte(i*53+71)^byte(i>>13)
+			want[i] = source.Bits[i] | dst.Bits[i]
+			setBits += uint64(bits.OnesCount8(source.Bits[i]))
+		}
+		var encoded bytes.Buffer
+		if err := Write(&encoded, source); err != nil {
+			t.Fatal(err)
+		}
+		got, err := Inspect(iotest.HalfReader(bytes.NewReader(encoded.Bytes())))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := source.metadata(setBits, uint64(size)); got != want {
+			t.Fatalf("size %d: metadata = %#v, want %#v", size, got, want)
+		}
+		if err := dst.UnionFrom(iotest.HalfReader(bytes.NewReader(encoded.Bytes())), DefaultMaxBytes); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(dst.Bits, want) || dst.InsertedItems != 12 {
+			t.Fatalf("size %d: streaming union changed bits or count", size)
+		}
 	}
 }
 

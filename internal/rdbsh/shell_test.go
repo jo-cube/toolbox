@@ -1,6 +1,9 @@
 package rdbsh
 
 import (
+	"bytes"
+	"errors"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -43,5 +46,28 @@ func TestSplitArgs(t *testing.T) {
 				t.Fatalf("splitArgs(%q) = %#v, want %#v", tt.line, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRunPropagatesOutputFailures(t *testing.T) {
+	t.Parallel()
+	failure := errors.New("output failed")
+	for _, input := range []string{"", "quit\n", "nope\nquit\n"} {
+		var out bytes.Buffer
+		s := &Shell{in: strings.NewReader(input), out: &out, errOut: io.Discard}
+		if err := s.Run(); err != nil {
+			t.Fatal(err)
+		}
+		for _, remaining := range []int{0, strings.Index(out.String(), "rdbsh> "), out.Len() - 1} {
+			s.in = strings.NewReader(input)
+			s.out = &limitedWriter{remaining: remaining, err: failure}
+			if err := s.Run(); !errors.Is(err, failure) {
+				t.Fatalf("input=%q remaining=%d: error = %v, want %v", input, remaining, err, failure)
+			}
+		}
+	}
+	s := &Shell{in: strings.NewReader("nope\n"), out: io.Discard, errOut: failedExportWriter{failure}}
+	if err := s.Run(); !errors.Is(err, failure) {
+		t.Fatalf("diagnostic error = %v, want %v", err, failure)
 	}
 }

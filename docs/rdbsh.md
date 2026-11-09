@@ -219,6 +219,9 @@ The selected column family is marked with `*`.
 
 `rdbsh` uses CGo and links against RocksDB.
 
+New Linux release binaries are built on Ubuntu 26.04 and require a compatible
+RocksDB runtime. Older distributions may need a source build.
+
 macOS:
 
 ```sh

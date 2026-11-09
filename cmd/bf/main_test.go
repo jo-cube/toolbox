@@ -5,9 +5,11 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	internalbf "github.com/jo-cube/toolbox/internal/bf"
@@ -96,6 +98,23 @@ func TestBuildWarnsWhenExpectedItemsAreExceeded(t *testing.T) {
 	}
 }
 
+func TestBuildAndDedupeRejectCollisionLimitedSizing(t *testing.T) {
+	t.Parallel()
+	for _, run := range []func([]string, io.Reader, io.Writer, io.Writer) error{build, dedupe} {
+		for _, noLimit := range []bool{false, true} {
+			args := []string{"--expected-items", "1", "--false-positive-rate", "1e-12"}
+			if noLimit {
+				args = append(args, "--no-size-limit")
+			}
+			var out, errOut bytes.Buffer
+			err := run(args, strings.NewReader("alpha\n"), &out, &errOut)
+			if err == nil || !strings.Contains(err.Error(), "false-positive-rate") || !strings.Contains(err.Error(), "collision lower bound") || out.Len() != 0 {
+				t.Fatalf("error = %v, stdout bytes = %d; want sizing error and no output", err, out.Len())
+			}
+		}
+	}
+}
+
 func TestInspectReadsFilterFromStdin(t *testing.T) {
 	t.Parallel()
 
@@ -115,6 +134,24 @@ func TestInspectReadsFilterFromStdin(t *testing.T) {
 		t.Fatalf("metadata = %#v", metadata)
 	}
 }
+
+func TestInspectPropagatesOutputFailure(t *testing.T) {
+	t.Parallel()
+	var artifact bytes.Buffer
+	if err := internalbf.Write(&artifact, newFilter(t, "alpha")); err != nil {
+		t.Fatal(err)
+	}
+	failure := errors.New("output failed")
+	for _, args := range [][]string{{"-"}, {"--json", "-"}} {
+		if err := inspect(args, bytes.NewReader(artifact.Bytes()), failingWriter{failure}); !errors.Is(err, failure) {
+			t.Fatalf("args=%v: error = %v, want %v", args, err, failure)
+		}
+	}
+}
+
+type failingWriter struct{ err error }
+
+func (w failingWriter) Write([]byte) (int, error) { return 0, w.err }
 
 func TestUnionReadsOneFilterFromStdin(t *testing.T) {
 	t.Parallel()

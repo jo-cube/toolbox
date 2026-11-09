@@ -23,7 +23,7 @@ build:
 	$(GO) build -ldflags '$(LDFLAGS)' -o "$(BIN_DIR)/sample" ./cmd/sample
 
 test:
-	$(RDBSH_ENV) $(GO) test ./...
+	$(RDBSH_ENV) $(GO) test -count=1 ./...
 
 run-hello:
 	$(GO) run -ldflags '$(LDFLAGS)' ./cmd/hello $(ARGS)

@@ -124,11 +124,51 @@ func approximate(paths []string, cfg Config) ([]Result, error) {
 }
 
 func ranked(counts map[string]uint64, top int) []Result {
-	items := make([]Result, 0, len(counts))
+	if top <= 0 || top >= len(counts)/2 {
+		items := make([]Result, 0, len(counts))
+		for item, count := range counts {
+			items = append(items, Result{Item: item, CountEstimate: count, CountLowerBound: count})
+		}
+		return rank(items, top)
+	}
+
+	items := make(resultHeap, 0, top)
 	for item, count := range counts {
-		items = append(items, Result{Item: item, CountEstimate: count, CountLowerBound: count})
+		entry := Result{Item: item, CountEstimate: count, CountLowerBound: count}
+		if len(items) < top {
+			items = append(items, entry)
+			if len(items) == top {
+				heap.Init(&items)
+			}
+		} else if resultBefore(&entry, &items[0]) {
+			items[0] = entry
+			heap.Fix(&items, 0)
+		}
 	}
 	return rank(items, top)
+}
+
+// resultHeap keeps the worst retained result at the root.
+type resultHeap []Result
+
+func (h resultHeap) Len() int           { return len(h) }
+func (h resultHeap) Less(i, j int) bool { return resultBefore(&h[j], &h[i]) }
+func (h resultHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *resultHeap) Push(value any)    { *h = append(*h, value.(Result)) }
+func (h *resultHeap) Pop() any {
+	old := *h
+	last := len(old) - 1
+	item := old[last]
+	old[last] = Result{}
+	*h = old[:last]
+	return item
+}
+
+func resultBefore(a, b *Result) bool {
+	if a.CountEstimate == b.CountEstimate {
+		return a.Item < b.Item
+	}
+	return a.CountEstimate > b.CountEstimate
 }
 
 func rank(items []Result, top int) []Result {

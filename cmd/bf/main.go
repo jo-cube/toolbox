@@ -16,7 +16,10 @@ import (
 
 func main() {
 	if len(os.Args) == 2 && (os.Args[1] == "--version" || os.Args[1] == "-V") {
-		fmt.Fprintf(os.Stdout, "bf %s\n", buildinfo.Version())
+		if _, err := fmt.Fprintf(os.Stdout, "bf %s\n", buildinfo.Version()); err != nil {
+			fmt.Fprintf(os.Stderr, "bf: %v\n", err)
+			os.Exit(1)
+		}
 		return
 	}
 	if len(os.Args) < 2 || os.Args[1] == "-h" || os.Args[1] == "--help" {
@@ -242,18 +245,10 @@ Options:
 	if *jsonOut {
 		return json.NewEncoder(out).Encode(m)
 	}
-	fmt.Fprintf(out, "type=%s\n", m.Type)
-	fmt.Fprintf(out, "version=%d\n", m.Version)
-	fmt.Fprintf(out, "expected_items=%d\n", m.ExpectedItems)
-	fmt.Fprintf(out, "inserted_items=%d\n", m.InsertedItems)
-	fmt.Fprintf(out, "false_positive_rate=%g\n", m.FalsePositiveRate)
-	fmt.Fprintf(out, "estimated_false_positive_rate=%g\n", m.EstimatedFalsePositiveRate)
-	fmt.Fprintf(out, "bit_count=%d\n", m.BitCount)
-	fmt.Fprintf(out, "bitset_bytes=%d\n", m.BitsetBytes)
-	fmt.Fprintf(out, "set_bits=%d\n", m.SetBits)
-	fmt.Fprintf(out, "fill_ratio=%g\n", m.FillRatio)
-	fmt.Fprintf(out, "hash=%s\n", m.Hash)
-	return nil
+	_, err = fmt.Fprintf(out, "type=%s\nversion=%d\nexpected_items=%d\ninserted_items=%d\nfalse_positive_rate=%g\nestimated_false_positive_rate=%g\nbit_count=%d\nbitset_bytes=%d\nset_bits=%d\nfill_ratio=%g\nhash=%s\n",
+		m.Type, m.Version, m.ExpectedItems, m.InsertedItems, m.FalsePositiveRate, m.EstimatedFalsePositiveRate,
+		m.BitCount, m.BitsetBytes, m.SetBits, m.FillRatio, m.Hash)
+	return err
 }
 
 func union(args []string, in io.Reader, out io.Writer) error {

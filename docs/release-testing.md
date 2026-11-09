@@ -34,11 +34,13 @@ Run the fast release smoke suite:
 VERSION=v0.3.0 sh scripts/release-test/smoke.sh
 ```
 
-This starts an `ubuntu:24.04` container, installs all nine released tools into
+This starts an `ubuntu:26.04` container, installs all nine released tools into
 `/tmp/toolbox-bin`, and runs the per-tool scripts in
 `scripts/release-test/smoke/`.
 
 The container installs RocksDB before `rdbsh`, so this suite verifies a compatible runtime rather than the installer's missing-runtime guidance.
+
+Use `IMAGE=ubuntu:24.04` when testing older releases built for that runtime.
 
 It covers:
 
@@ -78,7 +80,9 @@ The test uses:
 
 It creates a two-partition topic, produces records, verifies `ksetoff -dry-run`
 does not create or move the group, then commits `latest`, numeric offset `2`,
-`beginning`, a timestamp offset, and partition-scoped `end`.
+`beginning`, epoch and future timestamp offsets, and partition-scoped `end`.
+It rejects a sub-millisecond pre-epoch timestamp and verifies that resetting an
+active classic consumer group fails without changing its committed offsets.
 
 ## Performance Smoke Test
 
@@ -88,7 +92,7 @@ Run this after the functional smoke test to catch obvious stream regressions:
 VERSION=v0.3.0 sh scripts/release-test/perf.sh
 ```
 
-This starts an `ubuntu:24.04` container, installs the stream-oriented tools,
+This starts an `ubuntu:26.04` container, installs the stream-oriented tools,
 and runs the scripts in `scripts/release-test/perf/`.
 
 The numbers are smoke-test signals, not benchmark results. They should stay low
@@ -109,7 +113,7 @@ scripts/release-test/
 
 There are no Dockerfiles. The tests use trusted upstream images directly:
 
-- `ubuntu:24.04`
+- `ubuntu:26.04`
 - `apache/kafka:4.3.1`
 
 Add Dockerfiles only if repeated release testing becomes slow enough that a
@@ -132,7 +136,7 @@ docker volume ls --filter name=toolbox-ksetoff-test --format '{{.Name}}'
 Remove images pulled only for release testing:
 
 ```sh
-docker rmi ubuntu:24.04
+docker rmi ubuntu:26.04
 docker rmi apache/kafka:4.3.1
 ```
 

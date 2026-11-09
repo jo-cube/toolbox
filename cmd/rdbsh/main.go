@@ -56,7 +56,10 @@ Options:
 			flag.Usage()
 			return 2
 		}
-		fmt.Fprintf(os.Stdout, "rdbsh %s\n", buildinfo.Version())
+		if _, err := fmt.Fprintf(os.Stdout, "rdbsh %s\n", buildinfo.Version()); err != nil {
+			fmt.Fprintf(os.Stderr, "rdbsh: %v\n", err)
+			return 1
+		}
 		return 0
 	}
 

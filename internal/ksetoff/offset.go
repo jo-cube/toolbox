@@ -79,6 +79,9 @@ func ParseOffsetSpec(raw string) (OffsetSpec, error) {
 		for _, layout := range formats {
 			timestamp, err := time.Parse(layout, after)
 			if err == nil {
+				if timestamp.UnixMilli() < 0 {
+					return OffsetSpec{}, fmt.Errorf("invalid timestamp %q: must be on or after the Unix epoch (1970-01-01T00:00:00Z)", after)
+				}
 				return OffsetSpec{Mode: OffsetModeTimestamp, Timestamp: timestamp}, nil
 			}
 		}
